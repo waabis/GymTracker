@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rack">
+<meta name="theme-color" content="#17191A">
+<link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAACd0lEQVR42u3dPU7DQBCAUbJyTxklF0CioOIGnIVTcSIkKgokjsENaCgROOvd7Oz4vYqChM34w46t/ByOp/MN/KYYAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8TB/5Yed/r5crvm1+6ev/Yz6Blncmj71aErR7CrROadSRk7hepbJS4jzkzK2Cnk7mP2mZThU8jaR4KZOFuhZxytAs+088gxE3sOxIE4EAfiYKgl/hL/eMZ+tcvMEdZgz3HZudx1zvQirEEcNXPvvW0irEEc9RPvt20irEEcW2fdY9tEWIM4EAfiQByIA3GAOBAH4kAciANxIA6mF+uVYB/vbz8/vT7V37aVLWu4/LZtH9f9w6M9Bx3/VcShj25xtN+ZE6aPogx9OKwgDsSBOJg2jiZXWuhqyzYqA/82kctwWFGGOJRRZYn5kCreWtj8ALdlDQ3fGjnwwG3PgTgQB+JAHIgDcSAOxIE4EAeIA3GQN45LP22+x6fTR1iDOLbOut9WibAGcdRPvPdWibAGcdTM/TpbJcIahpjgy3giTD9xAc5WEAfiQByIg8RxtHomn+mMIMdM7DnoHMf2wPNdSEgwkxJhFlkvMc0+kzJ8FrkvPk49k8PxdG5+pyvfRryra9IzzqRLHHhCijgQB4gDcSAOxIE4EAfiQByIA3GAOBAH4kAciANxIA7EgTgQB+IwAsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8SBOBAH4kAciANxIA6y+Qabo6PKDjwGoAAAAABJRU5ErkJggg==">
+<title>Rack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#17191A; --surface:#212426; --surface2:#2A2E31; --line:#383D40;
+  --text:#EDEBE6; --muted:#8A9095; --accent:#F0B429; --ink:#17191A; --danger:#C4523F;
+  --pad:16px; --r:10px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);overscroll-behavior:none}
+body{font-family:Archivo,system-ui,sans-serif;font-size:16px;line-height:1.45;
+  font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+#app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+#main{flex:1;padding:calc(env(safe-area-inset-top) + 12px) var(--pad) 96px}
+h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:4px 0 18px}
+h2{font-size:17px;font-weight:600;margin:26px 0 10px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+button{font-family:inherit;font-size:16px;border:0;background:none;color:inherit;cursor:pointer;
+  user-select:none;-webkit-user-select:none}
+input{font-family:inherit;font-size:17px;background:var(--surface2);border:1px solid var(--line);
+  color:var(--text);border-radius:8px;padding:12px;width:100%;font-variant-numeric:tabular-nums}
+input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;
+  background:var(--accent);color:var(--ink);font-weight:600;padding:17px;border-radius:var(--r);
+  letter-spacing:.01em}
+.btn:active{filter:brightness(.88)}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line);font-weight:500}
+.btn.sm{padding:11px 16px;width:auto;font-size:15px}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+  padding:14px;margin-bottom:10px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tap{width:100%;text-align:left}
+.muted{color:var(--muted);font-size:14px}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:28px 20px;text-align:center;
+  color:var(--muted);margin-bottom:14px}
+
+/* set strip: numbered like a weight stack */
+.set{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+.set .n{width:24px;font-size:12px;font-weight:600;color:var(--muted)}
+.set .v{flex:1;font-size:20px;font-weight:800;letter-spacing:-.02em}
+.set .v em{font-style:normal;font-size:12px;font-weight:500;color:var(--muted);
+  letter-spacing:.08em;text-transform:uppercase;margin:0 8px 0 3px}
+.set .x{color:var(--muted);font-size:22px;padding:0 6px;line-height:1}
+
+.step{display:flex;align-items:center;gap:0;background:var(--surface2);
+  border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.step button{width:52px;height:52px;font-size:24px;font-weight:600;color:var(--accent);flex:none}
+.step button:active{background:var(--line)}
+.step input{border:0;border-radius:0;background:transparent;text-align:center;
+  font-size:19px;font-weight:600;padding:12px 0;min-width:0}
+.step input:focus{outline:none}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 10px}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:5px}
+
+nav{position:fixed;bottom:0;left:0;right:0;background:rgba(23,25,26,.94);
+  backdrop-filter:blur(12px);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);z-index:20}
+nav div{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+nav button{padding:13px 0 15px;font-size:11px;font-weight:600;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--muted)}
+nav button.on{color:var(--accent)}
+
+.bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.back{font-size:15px;color:var(--muted);font-weight:500}
+.timer{font-size:14px;font-weight:600;color:var(--accent);letter-spacing:.04em}
+.fin{background:var(--accent);color:var(--ink);font-weight:600;padding:9px 16px;border-radius:8px;font-size:15px}
+.danger{color:var(--danger);font-weight:500;font-size:15px}
+
+.err{color:var(--danger);font-size:14px;font-weight:500;margin-top:8px}
+.warn{background:var(--surface2);border:1px solid var(--line);border-left:3px solid var(--accent);
+  border-radius:0;padding:11px 13px;font-size:14px;color:var(--muted);margin-bottom:18px}
+.x{color:var(--muted);font-size:22px;padding:0 6px;line-height:1;background:none}
+</style>
+</head>
+<body>
+<div id="app"><div id="main"></div></div>
+<nav><div id="tabs"></div></nav>
+
+<script>
+const KEY='rack.v1';
+const uid=()=>Math.random().toString(36).slice(2,10);
+let db={routines:[],workouts:[],active:null};
+let view={t:'train'};
+let ui={pending:null,err:null,ekey:null,nostore:false};
+let tick=null;
+
+function load(){try{const r=localStorage.getItem(KEY);if(r)db=Object.assign(db,JSON.parse(r));}catch(e){ui.nostore=true;}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){ui.nostore=true;}}
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtW=w=>(Math.round(w*100)/100).toString();
+function fmtDate(ms){const d=new Date(ms);return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
+function dur(a,b){const m=Math.max(0,Math.round((b-a)/60000));return m<60?m+' min':Math.floor(m/60)+'h '+(m%60)+'m';}
+
+function fail(k,m){ui.err=m;ui.ekey=k;render();}
+function errAt(k){return ui.ekey===k&&ui.err?`<div class="err">${esc(ui.err)}</div>`:'';}
+function ask(k){ui.pending=k;ui.err=null;render();}
+function cancel(){ui.pending=null;render();}
+
+/* ---------- views ---------- */
+function render(){
+  const m=document.getElementById('main');
+  let html = ui.nostore?`<div class="warn">Preview mode &mdash; nothing is being saved. On your phone it will save properly.</div>`:'';
+  if(db.active)html+=vActive();
+  else if(view.t==='train')html+=vTrain();
+  else if(view.t==='routines')html+=vRoutines();
+  else if(view.t==='routine')html+=vRoutine();
+  else if(view.t==='history')html+=vHistory();
+  m.innerHTML=html;
+  document.getElementById('tabs').innerHTML=['train','routines','history']
+    .map(t=>`<button class="${view.t===t||(t==='routines'&&view.t==='routine')?'on':''}" onclick="go('${t}')">${t}</button>`).join('');
+  clearInterval(tick);
+  if(db.active){tick=setInterval(()=>{const e=document.getElementById('timer');
+    if(e)e.textContent=dur(db.active.startedAt,Date.now());},1000);}
+}
+function go(t){view={t};ui.pending=null;ui.err=null;ui.ekey=null;render();window.scrollTo(0,0);}
+
+function vTrain(){
+  if(!db.routines.length) return `<h1>Train</h1>
+    <div class="empty">No routines yet.<br>Build one first, then start a workout.</div>
+    <button class="btn" onclick="go('routines')">Create a routine</button>`;
+  return `<h1>Train</h1><p class="eyebrow">Pick a routine</p>`+
+    db.routines.map(r=>`<button class="card tap" onclick="start('${r.id}')">
+      <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
+      <div class="muted">${r.exercises.length} exercise${r.exercises.length===1?'':'s'}</div></div>
+      <div style="color:var(--accent);font-weight:600;font-size:15px">Start</div></div></button>`).join('')
+    +errAt('start');
+}
+
+function vRoutines(){
+  return `<h1>Routines</h1>`+
+    (db.routines.length?db.routines.map(r=>`<button class="card tap" onclick="openRoutine('${r.id}')">
+      <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
+      <div class="muted">${r.exercises.map(e=>esc(e.name)).join(' \u00b7 ')||'No exercises'}</div></div>
+      <div class="muted">&rsaquo;</div></div></button>`).join('')
+     :`<div class="empty">A routine is just a named list of exercises.<br>Push day, Legs, whatever you call it.</div>`)+
+    `<div class="lbl" style="margin-top:20px">New routine</div>
+     <input id="rname" placeholder="e.g. Push day" autocapitalize="sentences"
+       onkeydown="if(event.key==='Enter')newRoutine()">
+     ${errAt('rname')}
+     <div style="height:10px"></div>
+     <button class="btn" onclick="newRoutine()">Create routine</button>`;
+}
+
+function vRoutine(){
+  const r=db.routines.find(x=>x.id===view.id); if(!r){go('routines');return'';}
+  return `<div class="bar"><button class="back" onclick="go('routines')">&lsaquo; Routines</button>
+      ${ui.pending==='delr'
+        ? `<span><button class="back" onclick="cancel()">Cancel</button>
+           <button class="danger" style="margin-left:14px" onclick="delRoutine('${r.id}')">Tap to confirm</button></span>`
+        : `<button class="danger" onclick="ask('delr')">Delete</button>`}</div>
+    <h1>${esc(r.name)}</h1>
+    <p class="eyebrow">Exercises</p>
+    ${r.exercises.length?r.exercises.map((e,i)=>`<div class="card"><div class="row">
+      <div style="font-weight:500">${i+1}. ${esc(e.name)}</div>
+      <button class="x" onclick="delEx('${r.id}','${e.id}')">&times;</button></div></div>`).join('')
+      :`<div class="empty">Add the exercises you do in this session.</div>`}
+    <div style="margin-top:14px"><div class="lbl">Add exercise</div>
+      <input id="exname" placeholder="e.g. Barbell squat" autocapitalize="sentences"
+        onkeydown="if(event.key==='Enter')addEx('${r.id}')">
+      ${errAt('exname')}
+      <div style="height:10px"></div>
+      <button class="btn ghost" onclick="addEx('${r.id}')">Add</button></div>
+    <div style="height:18px"></div>
+    ${errAt('start')}
+    <button class="btn" onclick="start('${r.id}')">Start this workout</button>`;
+}
+
+function vActive(){
+  const a=db.active;
+  return `<div class="bar"><div><div style="font-weight:600">${esc(a.routineName)}</div>
+      <div class="timer" id="timer">${dur(a.startedAt,Date.now())}</div></div>
+      ${ui.pending==='fin'
+        ? `<span><button class="back" onclick="cancel()">Cancel</button>
+           <button class="fin" style="margin-left:12px" onclick="finish()">Save it</button></span>`
+        : `<button class="fin" onclick="ask('fin')">Finish</button>`}</div>
+    ${errAt('fin')}
+    ${a.entries.map((en,i)=>`<div class="card">
+      <div style="font-weight:600;margin-bottom:2px">${esc(en.name)}</div>
+      <div class="muted">${en.sets.length} set${en.sets.length===1?'':'s'} logged</div>
+      ${en.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
+        <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div>
+        <button class="x" onclick="delSet(${i},${j})">&times;</button></div>`).join('')}
+      <div class="pair">
+        <div><div class="lbl">Weight (kg)</div><div class="step">
+          <button onclick="bump(${i},'w',-2.5)">&minus;</button>
+          <input id="w${i}" inputmode="decimal" value="${nextW(en)}" onfocus="this.select()">
+          <button onclick="bump(${i},'w',2.5)">+</button></div></div>
+        <div><div class="lbl">Reps</div><div class="step">
+          <button onclick="bump(${i},'r',-1)">&minus;</button>
+          <input id="r${i}" inputmode="numeric" value="${nextR(en)}" onfocus="this.select()">
+          <button onclick="bump(${i},'r',1)">+</button></div></div>
+      </div>
+      ${errAt('set'+i)}
+      <button class="btn ghost" onclick="addSet(${i})">Log set</button>
+    </div>`).join('')}
+    <div style="height:8px"></div>
+    ${ui.pending==='disc'
+      ? `<div class="card"><div style="margin-bottom:12px">Discard this workout? Nothing will be saved.</div>
+         <div class="row"><button class="btn ghost sm" onclick="cancel()">Keep going</button>
+         <button class="btn sm" style="background:var(--danger);color:var(--text)" onclick="cancelWorkout()">Discard</button></div></div>`
+      : `<button class="btn ghost" onclick="ask('disc')"><span class="danger">Discard workout</span></button>`}`;
+}
+
+function vHistory(){
+  const w=[...db.workouts].sort((a,b)=>b.startedAt-a.startedAt);
+  if(!w.length)return `<h1>History</h1><div class="empty">Finished workouts show up here.</div>`;
+  return `<h1>History</h1>`+w.map(x=>{
+    const sets=x.entries.reduce((n,e)=>n+e.sets.length,0);
+    const vol=x.entries.reduce((n,e)=>n+e.sets.reduce((m,s)=>m+s.w*s.r,0),0);
+    const open=view.open===x.id;
+    return `<div class="card"><button class="tap" onclick="toggle('${x.id}')"><div class="row">
+      <div><div style="font-weight:600">${esc(x.routineName)}</div>
+      <div class="muted">${fmtDate(x.startedAt)} \u00b7 ${sets} sets \u00b7 ${Math.round(vol)} kg lifted</div></div>
+      <div class="muted">${open?'&#8964;':'&rsaquo;'}</div></div></button>
+      ${open?x.entries.map(e=>`<div style="margin-top:12px"><div class="lbl">${esc(e.name)}</div>
+        ${e.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
+          <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div></div>`).join('')}</div>`).join('')
+        +`<div style="height:14px"></div>`+(ui.pending==='delw'+x.id
+          ? `<div class="row"><button class="back" onclick="cancel()">Cancel</button>
+             <button class="danger" onclick="delWorkout('${x.id}')">Tap to confirm delete</button></div>`
+          : `<button class="danger" onclick="ask('delw${x.id}')">Delete this workout</button>`):''}
+    </div>`;}).join('');
+}
+
+/* ---------- actions ---------- */
+function newRoutine(){const el=document.getElementById('rname');const n=(el?el.value:'').trim();
+  if(!n){fail('rname','Give the routine a name first.');return;}
+  const r={id:uid(),name:n,exercises:[]};db.routines.push(r);save();
+  ui.err=null;view={t:'routine',id:r.id};render();window.scrollTo(0,0);}
+function openRoutine(id){view={t:'routine',id};ui.pending=null;render();window.scrollTo(0,0);}
+function delRoutine(id){db.routines=db.routines.filter(r=>r.id!==id);save();go('routines');}
+function addEx(rid){const el=document.getElementById('exname');const n=el.value.trim();
+  if(!n){fail('exname','Type an exercise name first.');return;}
+  db.routines.find(r=>r.id===rid).exercises.push({id:uid(),name:n});save();ui.err=null;render();
+  setTimeout(()=>{const e=document.getElementById('exname');if(e)e.focus();},30);}
+function delEx(rid,eid){const r=db.routines.find(x=>x.id===rid);
+  r.exercises=r.exercises.filter(e=>e.id!==eid);save();render();}
+
+function start(rid){const r=db.routines.find(x=>x.id===rid);
+  if(!r.exercises.length){fail('start','Add at least one exercise to this routine first.');return;}
+  db.active={id:uid(),routineId:r.id,routineName:r.name,startedAt:Date.now(),
+    entries:r.exercises.map(e=>({name:e.name,sets:[]}))};save();ui.err=null;render();window.scrollTo(0,0);}
+
+const nextW=en=>en.sets.length?fmtW(en.sets[en.sets.length-1].w):'20';
+const nextR=en=>en.sets.length?en.sets[en.sets.length-1].r:'8';
+function bump(i,f,d){const el=document.getElementById(f+i);
+  let v=parseFloat(el.value)||0;v=Math.max(0,Math.round((v+d)*100)/100);el.value=fmtW(v);}
+function addSet(i){const w=parseFloat(document.getElementById('w'+i).value);
+  const r=parseInt(document.getElementById('r'+i).value,10);
+  if(isNaN(w)||isNaN(r)||r<1){fail('set'+i,'Enter a weight and at least 1 rep.');return;}
+  db.active.entries[i].sets.push({w,r});save();ui.err=null;render();}
+function delSet(i,j){db.active.entries[i].sets.splice(j,1);save();render();}
+
+function finish(){const a=db.active;const done=a.entries.filter(e=>e.sets.length);
+  if(!done.length){ui.pending=null;fail('fin','Log at least one set before finishing.');return;}
+  db.workouts.push({id:a.id,routineId:a.routineId,routineName:a.routineName,
+    startedAt:a.startedAt,endedAt:Date.now(),entries:done});
+  db.active=null;save();ui.pending=null;ui.err=null;view={t:'history',open:a.id};render();window.scrollTo(0,0);}
+function cancelWorkout(){db.active=null;save();go('train');}
+function toggle(id){view={t:'history',open:view.open===id?null:id};ui.pending=null;render();}
+function delWorkout(id){db.workouts=db.workouts.filter(w=>w.id!==id);save();view={t:'history'};ui.pending=null;render();}
+
+load();
+try{localStorage.setItem(KEY+'.t','1');localStorage.removeItem(KEY+'.t');}catch(e){ui.nostore=true;}
+render();
+</script>
+</body>
+</html>
