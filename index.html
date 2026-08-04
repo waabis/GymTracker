@@ -17,9 +17,10 @@
 <style>
 :root{
   color-scheme:light;
-  --bg:#FFFFFF; --surface:#F7F6F2; --surface2:#EFEDE6; --line:#E2E0D7;
-  --text:#171A1B; --muted:#5B6066; --accent:#F5A900; --accent-fg:#8A5A00;
-  --ink:#171A1B; --danger:#C0392B; --danger-ink:#FFFFFF;
+  --bg:#FFFFFF; --surface:#EEF2F6; --surface2:#E2E8EE; --line:#D7DEE5;
+  --text:#171A1B; --muted:#5B6570; --accent:#F5A900; --accent-fg:#B45400;
+  --ink:#171A1B; --danger:#DC2626; --danger-ink:#FFFFFF;
+  --tab-routines:#1D4ED8; --tab-history:#15803D;
   --pad:16px; --r:14px; --r-sm:10px;
   --shadow-sm:0 1px 2px rgba(23,26,28,.05),0 3px 10px rgba(23,26,28,.06);
   --shadow-accent:0 10px 22px -8px rgba(245,169,0,.45);
@@ -32,7 +33,8 @@ body{font-family:Archivo,system-ui,sans-serif;font-size:16px;line-height:1.45;
 #main{flex:1;padding:calc(env(safe-area-inset-top) + 12px) var(--pad) 96px}
 h1{font-size:26px;font-weight:800;letter-spacing:-.02em;margin:4px 0 18px}
 h2{font-size:17px;font-weight:600;margin:26px 0 10px}
-.eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--section,var(--muted));margin:0 0 8px}
+.chev{color:var(--section,var(--muted));font-size:15px}
 button{font-family:inherit;font-size:16px;border:0;background:none;color:inherit;cursor:pointer;
   user-select:none;-webkit-user-select:none;transition:transform .08s ease,filter .15s ease,background-color .15s ease}
 input{font-family:inherit;font-size:17px;background:var(--surface2);border:1px solid var(--line);
@@ -79,10 +81,13 @@ nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.85);
   backdrop-filter:blur(16px);border-top:1px solid var(--line);
   box-shadow:0 -4px 16px rgba(23,26,28,.05);
   padding-bottom:env(safe-area-inset-bottom);z-index:20}
-nav div{max-width:520px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
-nav button{padding:13px 0 15px;font-size:11px;font-weight:600;letter-spacing:.12em;
-  text-transform:uppercase;color:var(--muted)}
-nav button.on{color:var(--accent-fg)}
+nav div{max-width:520px;margin:6px auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 8px}
+nav button{padding:12px 0 14px;font-size:12px;font-weight:700;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--muted);border-radius:12px;
+  transition:background-color .15s ease,color .15s ease}
+nav button.tab-train.on{color:var(--accent-fg);background:rgba(245,169,0,.18)}
+nav button.tab-routines.on{color:var(--tab-routines);background:rgba(29,78,216,.14)}
+nav button.tab-history.on{color:var(--tab-history);background:rgba(21,128,61,.14)}
 
 .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 .back{font-size:15px;color:var(--muted);font-weight:500}
@@ -185,8 +190,10 @@ function render(){
   else if(view.t==='routine')html+=vRoutine();
   else if(view.t==='history')html+=vHistory();
   m.innerHTML=html;
-  document.getElementById('tabs').innerHTML=['train','routines','history']
-    .map(t=>`<button class="${view.t===t||(t==='routines'&&view.t==='routine')?'on':''}" onclick="go('${t}')">${t}</button>`).join('');
+  m.style.setProperty('--section',{train:'var(--accent-fg)',routines:'var(--tab-routines)',
+    routine:'var(--tab-routines)',history:'var(--tab-history)'}[db.active?'train':view.t]||'var(--muted)');
+  document.getElementById('tabs').innerHTML=[['train','Workout'],['routines','Routines'],['history','History']]
+    .map(([t,label])=>`<button class="tab-${t} ${view.t===t||(t==='routines'&&view.t==='routine')?'on':''}" onclick="go('${t}')">${label}</button>`).join('');
   clearInterval(tick);
   if(db.active){tick=setInterval(()=>{const e=document.getElementById('timer');
     if(e)e.textContent=dur(db.active.startedAt,Date.now());},1000);}
@@ -196,10 +203,10 @@ function go(t){view={t};ui.pending=null;ui.err=null;ui.ekey=null;render();window
 
 function vTrain(){
   const routines=activeRoutines();
-  if(!routines.length) return `<h1>Train</h1>
+  if(!routines.length) return `<h1>Workout</h1>
     <div class="empty">No routines yet.<br>Build one first, then start a workout.</div>
     <button class="btn" onclick="go('routines')">Create a routine</button>`;
-  return `<h1>Train</h1><p class="eyebrow">Pick a routine</p>`+
+  return `<h1>Workout</h1><p class="eyebrow">Pick a routine</p>`+
     routines.map(r=>`<button class="card tap" onclick="start('${r.id}')">
       <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
       <div class="muted">${r.exercises.length} exercise${r.exercises.length===1?'':'s'}</div></div>
@@ -213,7 +220,7 @@ function vRoutines(){
     (routines.length?routines.map(r=>`<button class="card tap" onclick="openRoutine('${r.id}')">
       <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
       <div class="muted">${r.exercises.map(e=>esc(e.name)).join(' \u00b7 ')||'No exercises'}</div></div>
-      <div class="muted">&rsaquo;</div></div></button>`).join('')
+      <div class="chev">&rsaquo;</div></div></button>`).join('')
      :`<div class="empty">A routine is just a named list of exercises.<br>Push day, Legs, whatever you call it.</div>`)+
     `<div class="lbl" style="margin-top:20px">New routine</div>
      <input id="rname" placeholder="e.g. Push day" autocapitalize="sentences"
@@ -310,7 +317,7 @@ function vHistory(){
     return `<div class="card"><button class="tap" onclick="toggle('${x.id}')"><div class="row">
       <div><div style="font-weight:600">${esc(x.routineName)}</div>
       <div class="muted">${fmtDate(x.startedAt)} \u00b7 ${sets} sets \u00b7 ${Math.round(vol)} kg lifted</div></div>
-      <div class="muted">${open?'&#8964;':'&rsaquo;'}</div></div></button>
+      <div class="chev">${open?'&#8964;':'&rsaquo;'}</div></div></button>
       ${open?x.entries.map(e=>`<div style="margin-top:12px"><div class="lbl">${esc(e.name)}</div>
         ${e.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
           <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div></div>`).join('')}</div>`).join('')
