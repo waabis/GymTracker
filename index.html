@@ -100,6 +100,11 @@ nav button.tab-history.on{color:var(--tab-history);background:rgba(21,128,61,.14
 .warn{background:var(--surface2);border:1px solid var(--line);border-left:3px solid var(--accent);
   border-radius:var(--r-sm);padding:12px 14px;font-size:14px;color:var(--muted);margin-bottom:18px}
 .x{color:var(--muted);font-size:22px;padding:0 6px;line-height:1;background:none}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:11px 15px;border-radius:999px;background:var(--surface);border:1px solid var(--line);
+  font-size:14px;font-weight:500;color:var(--text)}
+.chip.on{background:var(--section,var(--accent));border-color:transparent;color:#fff;font-weight:600}
+.chip:active{transform:scale(.96)}
 </style>
 </head>
 <body>
@@ -112,10 +117,50 @@ const KEY='rack.v1';
 const uid=()=>(crypto.randomUUID?crypto.randomUUID():
   'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
     const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);}));
-let db={routines:[],workouts:[],active:null,syncCursor:0};
+let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:false};
 let view={t:'train'};
-let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false};
+let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:''};
 let tick=null;
+
+/* ---------- exercise catalog ---------- */
+const BODY_PARTS=['Chest','Back','Shoulders','Biceps','Triceps','Legs','Core','Cardio','Other'];
+const EQUIPMENT=['Barbell','Dumbbell','Cables','Machine','Bodyweight','Other'];
+const SEED=[
+  ['Bench Press (Barbell)','Chest','Barbell'],
+  ['Dumbbell Bench press (flat)','Chest','Dumbbell'],
+  ['Dumbbell Bench press (incline)','Chest','Dumbbell'],
+  ['Chest fly (Dumbbell)','Chest','Dumbbell'],
+  ['Chest fly (Cable)','Chest','Cables'],
+  ['Skullcrusher','Triceps','Barbell'],
+  ['Overhead tricep extensions','Triceps','Dumbbell'],
+  ['Barbell Rows','Back','Barbell'],
+  ['Lat Pulldowns','Back','Cables'],
+  ['Seated rows','Back','Cables'],
+  ['Dumbbell rows','Back','Dumbbell'],
+  ['Bicep curls (dumbbell)','Biceps','Dumbbell'],
+  ['Hammer curls (dumbbell)','Biceps','Dumbbell'],
+  ['Barbell curls','Biceps','Barbell'],
+  ['Barbell curls (close grip)','Biceps','Barbell'],
+  ['Squats','Legs','Barbell'],
+  ['Leg press','Legs','Cables'],
+  ['Leg extensions','Legs','Cables'],
+  ['Lying hamstring curls','Legs','Cables'],
+  ['Leg curls','Legs','Cables'],
+];
+const exById=id=>db.exercises.find(x=>x.id===id);
+const exName=(exerciseId,fallback)=>{const e=exById(exerciseId);
+  return e?e.name:(fallback||'Unknown exercise');};
+const activeExercises=()=>db.exercises.filter(e=>!e.deleted);
+const ROUTINE_VIEWS=['routines','routine','picker','exercises','exercise'];
+const norm=s=>String(s||'').trim().toLowerCase();
+const seedId=name=>'seed:'+norm(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+function findOrCreateEx(name){
+  const n=norm(name);
+  const hit=db.exercises.find(e=>norm(e.name)===n);
+  if(hit)return hit;
+  const e={id:uid(),name:String(name).trim(),bodyPart:'Other',equipment:'Other',deleted:false};
+  touch(e);db.exercises.push(e);return e;
+}
 
 /* ---------- sync (Phase 5) ---------- */
 const SUPABASE_URL='https://ahvzifwrwnczoeoltymo.supabase.co';
@@ -125,17 +170,47 @@ let sb=null,session=null,sync={status:'idle',err:null},syncing=false,syncTimer=n
 function load(){
   try{const r=localStorage.getItem(KEY);if(r)db=Object.assign(db,JSON.parse(r));}catch(e){ui.nostore=true;}
   if(db.syncCursor==null)db.syncCursor=0;
+  if(!db.exercises)db.exercises=[];
   const migrate=x=>{if(x.updatedAt==null){x.updatedAt=Date.now();x.dirty=true;}if(x.deleted==null)x.deleted=false;};
+  db.exercises.forEach(migrate);
+  /* Seed the master list once; the flag stops deleted seeds coming back.
+     Seed ids are derived from the name so every device generates the same id
+     and they merge on sync instead of duplicating. updatedAt is 1 (not now)
+     so a real edit made on another device always wins the merge. */
+  if(!db.seeded){
+    SEED.forEach(([name,bodyPart,equipment])=>{
+      const id=seedId(name);
+      if(db.exercises.some(e=>e.id===id||norm(e.name)===norm(name)))return;
+      db.exercises.push({id,name,bodyPart,equipment,deleted:false,updatedAt:1,dirty:true});
+    });
+    db.seeded=true;
+  }
+  /* back-fill exerciseId on anything created before the catalog existed */
   db.routines.forEach(r=>{migrate(r);
-    r.exercises.forEach(e=>{if(e.sets==null){e.sets=4;r.dirty=true;}});
+    r.exercises.forEach(e=>{
+      if(e.sets==null){e.sets=4;r.dirty=true;}
+      if(!e.exerciseId){e.exerciseId=findOrCreateEx(e.name).id;touch(r);}
+    });
   });
-  db.workouts.forEach(migrate);
+  db.workouts.forEach(w=>{migrate(w);
+    w.entries.forEach(en=>{if(!en.exerciseId){en.exerciseId=findOrCreateEx(en.name).id;touch(w);}});
+  });
+  if(db.active)db.active.entries.forEach(en=>{
+    if(!en.exerciseId)en.exerciseId=findOrCreateEx(en.name).id;});
+  /* persist the migration, or auto-created exercises would get a fresh id
+     on every load and pile up as duplicates once synced */
+  save(false);
 }
-function lastEntryFor(name){
+function lastEntryFor(exerciseId,fallbackName){
   const past=activeWorkouts().sort((a,b)=>b.startedAt-a.startedAt);
-  for(const w of past){const e=w.entries.find(x=>x.name===name);if(e&&e.sets.length)return e;}
+  for(const w of past){
+    const e=w.entries.find(x=>x.exerciseId?x.exerciseId===exerciseId:norm(x.name)===norm(fallbackName));
+    if(e&&e.sets.length)return e;
+  }
   return null;
 }
+const exInUse=id=>db.routines.some(r=>!r.deleted&&r.exercises.some(e=>e.exerciseId===id))
+  ||db.workouts.some(w=>!w.deleted&&w.entries.some(en=>en.exerciseId===id));
 function save(sync_){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){ui.nostore=true;}
   if(sync_!==false)scheduleSync();}
 function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow('write'),400);}
@@ -188,18 +263,22 @@ function render(){
   else if(view.t==='train')html+=vTrain();
   else if(view.t==='routines')html+=vRoutines();
   else if(view.t==='routine')html+=vRoutine();
+  else if(view.t==='picker')html+=vPicker();
+  else if(view.t==='exercises')html+=vExercises();
+  else if(view.t==='exercise')html+=vExercise();
   else if(view.t==='history')html+=vHistory();
   m.innerHTML=html;
-  m.style.setProperty('--section',{train:'var(--accent-fg)',routines:'var(--tab-routines)',
-    routine:'var(--tab-routines)',history:'var(--tab-history)'}[db.active?'train':view.t]||'var(--muted)');
+  const sect=db.active?'train':(ROUTINE_VIEWS.includes(view.t)?'routines':view.t);
+  m.style.setProperty('--section',{train:'var(--accent-fg)',
+    routines:'var(--tab-routines)',history:'var(--tab-history)'}[sect]||'var(--muted)');
   document.getElementById('tabs').innerHTML=[['train','Workout'],['routines','Routines'],['history','History']]
-    .map(([t,label])=>`<button class="tab-${t} ${view.t===t||(t==='routines'&&view.t==='routine')?'on':''}" onclick="go('${t}')">${label}</button>`).join('');
+    .map(([t,label])=>`<button class="tab-${t} ${t===sect&&!db.active||view.t===t?'on':''}" onclick="go('${t}')">${label}</button>`).join('');
   clearInterval(tick);
   if(db.active){tick=setInterval(()=>{const e=document.getElementById('timer');
     if(e)e.textContent=dur(db.active.startedAt,Date.now());},1000);}
   renderSyncBadge();
 }
-function go(t){view={t};ui.pending=null;ui.err=null;ui.ekey=null;render();window.scrollTo(0,0);}
+function go(t){view={t};ui.pending=null;ui.err=null;ui.ekey=null;ui.q='';render();window.scrollTo(0,0);}
 
 function vTrain(){
   const routines=activeRoutines();
@@ -219,7 +298,7 @@ function vRoutines(){
   return `<h1>Routines</h1>`+
     (routines.length?routines.map(r=>`<button class="card tap" onclick="openRoutine('${r.id}')">
       <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
-      <div class="muted">${r.exercises.map(e=>esc(e.name)).join(' \u00b7 ')||'No exercises'}</div></div>
+      <div class="muted">${r.exercises.map(e=>esc(exName(e.exerciseId,e.name))).join(' \u00b7 ')||'No exercises'}</div></div>
       <div class="chev">&rsaquo;</div></div></button>`).join('')
      :`<div class="empty">A routine is just a named list of exercises.<br>Push day, Legs, whatever you call it.</div>`)+
     `<div class="lbl" style="margin-top:20px">New routine</div>
@@ -227,7 +306,12 @@ function vRoutines(){
        onkeydown="if(event.key==='Enter')newRoutine()">
      ${errAt('rname')}
      <div style="height:10px"></div>
-     <button class="btn" onclick="newRoutine()">Create routine</button>`;
+     <button class="btn" onclick="newRoutine()">Create routine</button>
+     <div style="height:26px"></div>
+     <button class="card tap" style="margin:0" onclick="go('exercises')"><div class="row">
+       <div><div style="font-weight:600">Manage exercises</div>
+       <div class="muted">${activeExercises().length} in your list</div></div>
+       <div class="chev">&rsaquo;</div></div></button>`;
 }
 
 function vRoutine(){
@@ -239,26 +323,101 @@ function vRoutine(){
         : `<button class="danger" onclick="ask('delr')">Delete</button>`}</div>
     <h1>${esc(r.name)}</h1>
     <p class="eyebrow">Exercises</p>
-    ${r.exercises.length?r.exercises.map((e,i)=>`<div class="card">
-      <div class="row"><div style="font-weight:500">${i+1}. ${esc(e.name)}</div>
+    ${r.exercises.length?r.exercises.map((e,i)=>{const cat=exById(e.exerciseId);
+      return `<div class="card">
+      <div class="row"><div style="font-weight:500">${i+1}. ${esc(exName(e.exerciseId,e.name))}</div>
       <button class="x" onclick="delEx('${r.id}','${e.id}')">&times;</button></div>
+      ${cat?`<div class="muted" style="font-size:13px">${esc(cat.bodyPart)} · ${esc(cat.equipment)}</div>`:''}
       <div class="row" style="margin-top:8px">
         <div class="muted">${e.sets||4} set${(e.sets||4)===1?'':'s'}</div>
         <div style="display:flex;align-items:center;gap:2px">
           <button class="x" onclick="adjustExSets('${r.id}','${e.id}',-1)">&minus;</button>
           <button class="x" onclick="adjustExSets('${r.id}','${e.id}',1)">+</button>
         </div>
-      </div></div>`).join('')
+      </div></div>`;}).join('')
       :`<div class="empty">Add the exercises you do in this session.</div>`}
-    <div style="margin-top:14px"><div class="lbl">Add exercise</div>
-      <input id="exname" placeholder="e.g. Barbell squat" autocapitalize="sentences"
-        onkeydown="if(event.key==='Enter')addEx('${r.id}')">
-      ${errAt('exname')}
-      <div style="height:10px"></div>
-      <button class="btn ghost" onclick="addEx('${r.id}')">Add</button></div>
+    <div style="height:6px"></div>
+    <button class="btn ghost" onclick="openPicker('${r.id}')">+ Add exercise</button>
     <div style="height:18px"></div>
     ${errAt('start')}
     <button class="btn" onclick="start('${r.id}')">Start this workout</button>`;
+}
+
+/* group the catalog by body part for the picker and the manager */
+function exGroups(q){
+  const list=activeExercises().filter(e=>!q||norm(e.name).includes(norm(q)));
+  const order=bp=>{const i=BODY_PARTS.indexOf(bp);return i<0?999:i;};
+  const byBp={};
+  list.forEach(e=>{const bp=e.bodyPart||'Other';(byBp[bp]=byBp[bp]||[]).push(e);});
+  return Object.keys(byBp).sort((a,b)=>order(a)-order(b)||a.localeCompare(b))
+    .map(bp=>[bp,byBp[bp].sort((a,b)=>a.name.localeCompare(b.name))]);
+}
+function vPicker(){
+  const r=activeRoutines().find(x=>x.id===view.id); if(!r){go('routines');return'';}
+  const groups=exGroups(ui.q);
+  return `<div class="bar"><button class="back" onclick="openRoutine('${r.id}')">&lsaquo; ${esc(r.name)}</button></div>
+    <h1>Add exercise</h1>
+    <input id="exq" placeholder="Search your exercises" autocapitalize="off"
+      value="${esc(ui.q)}" oninput="setQ(this.value)">
+    <div style="height:14px"></div>
+    ${groups.length?groups.map(([bp,items])=>`<p class="eyebrow">${esc(bp)}</p>`+
+      items.map(e=>{const used=r.exercises.some(x=>x.exerciseId===e.id);
+      return `<button class="card tap" onclick="pickExercise('${r.id}','${e.id}')"><div class="row">
+        <div><div style="font-weight:600">${esc(e.name)}</div>
+        <div class="muted">${esc(e.equipment)}${used?' &middot; already added':''}</div></div>
+        <div class="chev">+</div></div></button>`;}).join('')).join('')
+      :`<div class="empty">Nothing in your list matches that.</div>`}
+    <div class="lbl" style="margin-top:20px">Not in your list?</div>
+    <input id="newexname" placeholder="New exercise name" autocapitalize="sentences"
+      onkeydown="if(event.key==='Enter')newExercise('${r.id}')">
+    ${errAt('newex')}
+    <div style="height:10px"></div>
+    <button class="btn ghost" onclick="newExercise('${r.id}')">Create and add</button>`;
+}
+function vExercises(){
+  const groups=exGroups(ui.q);
+  return `<div class="bar"><button class="back" onclick="go('routines')">&lsaquo; Routines</button></div>
+    <h1>Exercises</h1>
+    <input id="exq" placeholder="Search" autocapitalize="off"
+      value="${esc(ui.q)}" oninput="setQ(this.value)">
+    <div style="height:14px"></div>
+    ${groups.length?groups.map(([bp,items])=>`<p class="eyebrow">${esc(bp)}</p>`+
+      items.map(e=>`<button class="card tap" onclick="openExercise('${e.id}')"><div class="row">
+        <div><div style="font-weight:600">${esc(e.name)}</div>
+        <div class="muted">${esc(e.equipment)}</div></div>
+        <div class="chev">&rsaquo;</div></div></button>`).join('')).join('')
+      :`<div class="empty">Nothing matches that.</div>`}
+    <div class="lbl" style="margin-top:20px">Add a new exercise</div>
+    <input id="newexname" placeholder="e.g. Overhead press" autocapitalize="sentences"
+      onkeydown="if(event.key==='Enter')newExercise('')">
+    ${errAt('newex')}
+    <div style="height:10px"></div>
+    <button class="btn ghost" onclick="newExercise('')">Add to list</button>`;
+}
+function vExercise(){
+  const e=exById(view.id); if(!e||e.deleted){go('exercises');return'';}
+  const chips=(field,opts)=>`<div class="chips">`+opts.map(o=>
+    `<button class="chip${e[field]===o?' on':''}" onclick="setExerciseTag('${e.id}','${field}','${o}')">${o}</button>`
+    ).join('')+`</div>`;
+  return `<div class="bar"><button class="back" onclick="go('exercises')">&lsaquo; Exercises</button>
+      ${ui.pending==='delex'
+        ? `<span><button class="back" onclick="cancel()">Cancel</button>
+           <button class="danger" style="margin-left:14px" onclick="delExercise('${e.id}')">Tap to confirm</button></span>`
+        : `<button class="danger" onclick="ask('delex')">Delete</button>`}</div>
+    <h1>${esc(e.name)}</h1>
+    ${ui.pending==='delex'&&exInUse(e.id)
+      ? `<div class="warn">This one is used in a routine or a past workout. Deleting only hides it from your list &mdash; the sets you already logged stay in History.</div>`:''}
+    <div class="lbl">Name</div>
+    <input id="exrename" value="${esc(e.name)}" autocapitalize="sentences"
+      onkeydown="if(event.key==='Enter')renameExercise('${e.id}')">
+    ${errAt('exrename')}
+    <div style="height:10px"></div>
+    <button class="btn ghost" onclick="renameExercise('${e.id}')">Save name</button>
+    <div class="muted" style="margin-top:8px;font-size:13px">Renaming keeps every set you have ever logged for this exercise.</div>
+    <div class="lbl" style="margin-top:22px">Body part</div>
+    ${chips('bodyPart',BODY_PARTS)}
+    <div class="lbl" style="margin-top:18px">Equipment</div>
+    ${chips('equipment',EQUIPMENT)}`;
 }
 
 function vActive(){
@@ -272,9 +431,9 @@ function vActive(){
     ${errAt('fin')}
     ${a.entries.map((en,i)=>{
       const target=en.target||4;
-      const last=lastEntryFor(en.name);
+      const last=lastEntryFor(en.exerciseId,en.name);
       return `<div class="card">
-      <div style="font-weight:600;margin-bottom:2px">${esc(en.name)}</div>
+      <div style="font-weight:600;margin-bottom:2px">${esc(exName(en.exerciseId,en.name))}</div>
       ${last?`<div class="muted" style="margin-bottom:6px">Last time: ${last.sets.map(s=>fmtW(s.w)+'kg×'+s.r).join(', ')}</div>`:''}
       <div class="row" style="margin-bottom:4px">
         <div class="muted">${en.sets.length} of ${target} set${target===1?'':'s'}</div>
@@ -318,7 +477,7 @@ function vHistory(){
       <div><div style="font-weight:600">${esc(x.routineName)}</div>
       <div class="muted">${fmtDate(x.startedAt)} \u00b7 ${sets} sets \u00b7 ${Math.round(vol)} kg lifted</div></div>
       <div class="chev">${open?'&#8964;':'&rsaquo;'}</div></div></button>
-      ${open?x.entries.map(e=>`<div style="margin-top:12px"><div class="lbl">${esc(e.name)}</div>
+      ${open?x.entries.map(e=>`<div style="margin-top:12px"><div class="lbl">${esc(exName(e.exerciseId,e.name))}</div>
         ${e.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
           <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div></div>`).join('')}</div>`).join('')
         +`<div style="height:14px"></div>`+(ui.pending==='delw'+x.id
@@ -337,19 +496,48 @@ function newRoutine(){const el=document.getElementById('rname');const n=(el?el.v
 function openRoutine(id){view={t:'routine',id};ui.pending=null;render();window.scrollTo(0,0);}
 function delRoutine(id){const r=db.routines.find(x=>x.id===id);
   if(r){r.deleted=true;touch(r);}save();go('routines');}
-function addEx(rid){const el=document.getElementById('exname');const n=el.value.trim();
-  if(!n){fail('exname','Type an exercise name first.');return;}
-  const r=db.routines.find(r=>r.id===rid);r.exercises.push({id:uid(),name:n,sets:4});touch(r);save();ui.err=null;render();
-  setTimeout(()=>{const e=document.getElementById('exname');if(e)e.focus();},30);}
 function delEx(rid,eid){const r=db.routines.find(x=>x.id===rid);
   r.exercises=r.exercises.filter(e=>e.id!==eid);touch(r);save();render();}
 function adjustExSets(rid,eid,d){const r=db.routines.find(x=>x.id===rid);
   const e=r.exercises.find(x=>x.id===eid);e.sets=Math.max(1,(e.sets||4)+d);touch(r);save();render();}
 
+/* ---------- exercise catalog actions ---------- */
+function openPicker(rid){view={t:'picker',id:rid};ui.q='';ui.err=null;ui.pending=null;
+  render();window.scrollTo(0,0);}
+/* render() replaces the DOM, so put the cursor back in the search box */
+function setQ(v){ui.q=v;render();
+  const el=document.getElementById('exq');
+  if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}}
+function pickExercise(rid,exid){const r=db.routines.find(x=>x.id===rid);
+  const cat=exById(exid);
+  r.exercises.push({id:uid(),exerciseId:exid,name:cat?cat.name:'',sets:4});
+  touch(r);save();view={t:'routine',id:rid};ui.q='';render();window.scrollTo(0,0);}
+function newExercise(rid){const el=document.getElementById('newexname');
+  const n=(el?el.value:'').trim();
+  if(!n){fail('newex','Type an exercise name first.');return;}
+  if(activeExercises().some(e=>norm(e.name)===norm(n))){
+    fail('newex','That exercise is already in your list.');return;}
+  const e=findOrCreateEx(n);save();ui.err=null;
+  if(rid)pickExercise(rid,e.id);
+  else{view={t:'exercise',id:e.id};render();window.scrollTo(0,0);}}
+function openExercise(id){view={t:'exercise',id};ui.pending=null;ui.err=null;
+  render();window.scrollTo(0,0);}
+function renameExercise(id){const el=document.getElementById('exrename');
+  const n=(el?el.value:'').trim();
+  if(!n){fail('exrename','Give it a name.');return;}
+  if(db.exercises.some(x=>x.id!==id&&!x.deleted&&norm(x.name)===norm(n))){
+    fail('exrename','Another exercise already has that name.');return;}
+  const e=exById(id);e.name=n;touch(e);save();ui.err=null;render();}
+function setExerciseTag(id,field,value){const e=exById(id);
+  e[field]=value;touch(e);save();render();}
+function delExercise(id){const e=exById(id);
+  if(e){e.deleted=true;touch(e);}save();go('exercises');}
+
 function start(rid){const r=db.routines.find(x=>x.id===rid);
   if(!r.exercises.length){fail('start','Add at least one exercise to this routine first.');return;}
   db.active={id:uid(),routineId:r.id,routineName:r.name,startedAt:Date.now(),
-    entries:r.exercises.map(e=>({name:e.name,sets:[],target:e.sets||4}))};save();ui.err=null;render();window.scrollTo(0,0);}
+    entries:r.exercises.map(e=>({exerciseId:e.exerciseId,name:exName(e.exerciseId,e.name),
+      sets:[],target:e.sets||4}))};save();ui.err=null;render();window.scrollTo(0,0);}
 function adjustTarget(i,d){const en=db.active.entries[i];
   en.target=Math.max(1,(en.target||4)+d);save();render();}
 
@@ -379,6 +567,10 @@ function withTimeout(builder,ms){
   const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms||8000);
   return builder.abortSignal(ctrl.signal).then(r=>{clearTimeout(t);return r;},e=>{clearTimeout(t);throw e;});
 }
+const toServerExercise=(e,uidStr)=>({id:e.id,user_id:uidStr,name:e.name,body_part:e.bodyPart,
+  equipment:e.equipment,deleted:!!e.deleted,updated_at:e.updatedAt});
+const fromServerExercise=row=>({id:row.id,name:row.name,bodyPart:row.body_part||'Other',
+  equipment:row.equipment||'Other',deleted:row.deleted,updatedAt:row.updated_at,dirty:false});
 const toServerRoutine=(r,uidStr)=>({id:r.id,user_id:uidStr,name:r.name,exercises:r.exercises,
   deleted:!!r.deleted,updated_at:r.updatedAt});
 const fromServerRoutine=row=>({id:row.id,name:row.name,exercises:row.exercises||[],
@@ -395,20 +587,27 @@ function mergeRow(list,incoming){
 }
 async function pushOutbox(){
   const uidStr=session.user.id;
-  const dr=db.routines.filter(r=>r.dirty),dw=db.workouts.filter(w=>w.dirty);
+  const de=db.exercises.filter(e=>e.dirty),dr=db.routines.filter(r=>r.dirty),dw=db.workouts.filter(w=>w.dirty);
+  /* exercises first: routines and workouts reference them */
+  if(de.length){const{error}=await withTimeout(sb.from('exercises').upsert(de.map(e=>toServerExercise(e,uidStr))));
+    if(error)throw error;de.forEach(e=>e.dirty=false);}
   if(dr.length){const{error}=await withTimeout(sb.from('routines').upsert(dr.map(r=>toServerRoutine(r,uidStr))));
     if(error)throw error;dr.forEach(r=>r.dirty=false);}
   if(dw.length){const{error}=await withTimeout(sb.from('workouts').upsert(dw.map(w=>toServerWorkout(w,uidStr))));
     if(error)throw error;dw.forEach(w=>w.dirty=false);}
-  if(dr.length||dw.length)save(false);
+  if(de.length||dr.length||dw.length)save(false);
 }
 async function pullChanges(){
   const uidStr=session.user.id;
+  /* pull the catalog first so names resolve for whatever references it */
+  const er=await withTimeout(sb.from('exercises').select('*').eq('user_id',uidStr).gt('updated_at',db.syncCursor));
+  if(er.error)throw er.error;
   const rr=await withTimeout(sb.from('routines').select('*').eq('user_id',uidStr).gt('updated_at',db.syncCursor));
   if(rr.error)throw rr.error;
   const wr=await withTimeout(sb.from('workouts').select('*').eq('user_id',uidStr).gt('updated_at',db.syncCursor));
   if(wr.error)throw wr.error;
   let maxTs=db.syncCursor;
+  er.data.forEach(row=>{const c=fromServerExercise(row);mergeRow(db.exercises,c);if(c.updatedAt>maxTs)maxTs=c.updatedAt;});
   rr.data.forEach(row=>{const c=fromServerRoutine(row);mergeRow(db.routines,c);if(c.updatedAt>maxTs)maxTs=c.updatedAt;});
   wr.data.forEach(row=>{const c=fromServerWorkout(row);mergeRow(db.workouts,c);if(c.updatedAt>maxTs)maxTs=c.updatedAt;});
   db.syncCursor=maxTs;save(false);
@@ -416,7 +615,13 @@ async function pullChanges(){
 async function syncNow(trigger){
   if(!session||!sb||syncing)return;
   syncing=true;sync.status='syncing';sync.err=null;renderSyncBadge();
-  try{await pushOutbox();await pullChanges();sync.status='idle';
+  try{
+    /* First sync on this device pulls first: its freshly seeded catalog is
+       stale by definition, and pushing it first would overwrite edits made
+       on another device. After that, push first so local work goes up fast. */
+    if(db.syncCursor===0){await pullChanges();await pushOutbox();}
+    else{await pushOutbox();await pullChanges();}
+    sync.status='idle';
     if(!db.active&&(view.t==='routines'||view.t==='history'||view.t==='train'))render();}
   catch(e){sync.status='error';sync.err=(e&&e.message)||'Sync failed';}
   syncing=false;renderSyncBadge();
