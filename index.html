@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#FFFFFF">
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAACd0lEQVR42u3dPU7DQBCAUbJyTxklF0CioOIGnIVTcSIkKgokjsENaCgROOvd7Oz4vYqChM34w46t/ByOp/MN/KYYAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8TB/5Yed/r5crvm1+6ev/Yz6Blncmj71aErR7CrROadSRk7hepbJS4jzkzK2Cnk7mP2mZThU8jaR4KZOFuhZxytAs+088gxE3sOxIE4EAfiYKgl/hL/eMZ+tcvMEdZgz3HZudx1zvQirEEcNXPvvW0irEEc9RPvt20irEEcW2fdY9tEWIM4EAfiQByIA3GAOBAH4kAciANxIA6mF+uVYB/vbz8/vT7V37aVLWu4/LZtH9f9w6M9Bx3/VcShj25xtN+ZE6aPogx9OKwgDsSBOJg2jiZXWuhqyzYqA/82kctwWFGGOJRRZYn5kCreWtj8ALdlDQ3fGjnwwG3PgTgQB+JAHIgDcSAOxIE4EAeIA3GQN45LP22+x6fTR1iDOLbOut9WibAGcdRPvPdWibAGcdTM/TpbJcIahpjgy3giTD9xAc5WEAfiQByIg8RxtHomn+mMIMdM7DnoHMf2wPNdSEgwkxJhFlkvMc0+kzJ8FrkvPk49k8PxdG5+pyvfRryra9IzzqRLHHhCijgQB4gDcSAOxIE4EAfiQByIA3GAOBAH4kAciANxIA7EgTgQB+IwAsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8SBOBAH4kAciANxIA6y+Qabo6PKDjwGoAAAAABJRU5ErkJggg==">
 <title>Rack</title>
+<link rel="manifest" href="./manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet">
@@ -119,7 +120,7 @@ const uid=()=>(crypto.randomUUID?crypto.randomUUID():
     const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);}));
 let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:false};
 let view={t:'train'};
-let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:''};
+let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false};
 let tick=null;
 
 /* ---------- exercise catalog ---------- */
@@ -258,6 +259,8 @@ async function logout(){if(sb)await sb.auth.signOut();render();}
 function render(){
   const m=document.getElementById('main');
   let html = ui.nostore?`<div class="warn">Preview mode &mdash; nothing is being saved. On your phone it will save properly.</div>`:'';
+  if(ui.updateReady)html+=`<div class="warn" style="cursor:pointer;border-left-color:var(--tab-history)"
+    onclick="applyUpdate()">New version ready &mdash; tap to update</div>`;
   if(!session)html+=vAuthBanner();
   if(db.active)html+=vActive();
   else if(view.t==='train')html+=vTrain();
@@ -640,13 +643,45 @@ function initSupabase(){
     }
   }catch(e){}
 }
+/* ---------- offline shell (Phase 2) ---------- */
+let swReg=null,swReloading=false,swUpdating=false;
+function applyUpdate(){
+  if(swReg&&swReg.waiting){swUpdating=true;swReg.waiting.postMessage('SKIP_WAITING');}
+  else location.reload();
+}
+function initServiceWorker(){
+  if(!('serviceWorker' in navigator))return;
+  /* Only reload when the user asked for the update. The first install also
+     fires this (via clients.claim) and must not bounce the page. */
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(!swUpdating||swReloading)return;swReloading=true;location.reload();
+  });
+  navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>{
+    swReg=reg;
+    /* An existing controller means this is an update, not the first install —
+       only then is there something for the user to apply. */
+    if(reg.waiting&&navigator.serviceWorker.controller){ui.updateReady=true;render();}
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing;if(!nw)return;
+      nw.addEventListener('statechange',()=>{
+        if(nw.state==='installed'&&navigator.serviceWorker.controller){ui.updateReady=true;render();}
+      });
+    });
+  }).catch(()=>{});
+}
+
 window.addEventListener('online',()=>syncNow('online'));
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow('foreground');});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState!=='visible')return;
+  syncNow('foreground');
+  if(swReg)swReg.update().catch(()=>{});
+});
 
 load();
 try{localStorage.setItem(KEY+'.t','1');localStorage.removeItem(KEY+'.t');}catch(e){ui.nostore=true;}
 render();
 initSupabase();
+initServiceWorker();
 </script>
 </body>
 </html>

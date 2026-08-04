@@ -1,0 +1,6 @@
+.DS_Store
+
+# Local Claude Code tooling, except the dev-server config which is worth sharing
+# (a service worker cannot be tested over file://, so you need a real server).
+.claude/*
+!.claude/launch.json

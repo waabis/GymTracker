@@ -3,10 +3,24 @@
 ## What this is
 
 A personal workout tracker for one user (Waabis). Web app, added to the iPhone
-home screen. Currently a single self-contained `index.html` with no build step,
-no dependencies, and no backend.
+home screen. No build step and no npm dependencies. Three static files:
+
+- `index.html` — the whole app, still readable end to end
+- `sw.js` — service worker: offline shell and clean updates
+- `manifest.json` — home-screen install metadata
+
+Supabase (cloud backup) is loaded from a CDN `<script>` tag, not bundled.
 
 Live at: https://waabis.github.io/GymTracker/ (GitHub Pages, `main` branch, root)
+
+## Deploying
+
+**Bump `CACHE` in `sw.js` whenever `index.html` changes.** Changing `sw.js` is
+what tells a phone there is a new version; without a bump, phones keep serving
+the cached old app forever and your change never lands.
+
+Testing the service worker needs a real server — it will not register over
+`file://`. `.claude/launch.json` runs one: `python3 -m http.server 8765`.
 
 ## Non-negotiable constraints
 
@@ -21,46 +35,82 @@ These come from real use, not preference. Don't quietly trade them away.
 4. **No browser pop-ups.** `alert()`, `confirm()` and `prompt()` are banned —
    they are unreliable in iOS standalone home-screen apps. Use in-app inputs and
    two-tap confirmations instead. This has already caused one bug.
-5. **Single file, no build step**, until there's a concrete reason to change.
-   The user is not a full-time developer and values being able to read the
-   whole app.
+5. **No build step, as few files as possible.** The user is not a full-time
+   developer and values being able to read the whole app. This was "single
+   file" until Phase 2 — a service worker *cannot* be inlined in HTML, it has
+   to be its own file at its own URL. That was a real technical forcing
+   function, not a preference. Hold the same bar for any further file: it has
+   to be impossible to do otherwise, not merely tidier.
 
-## Current state (end of Phase 1)
+## Current state
 
-Implemented in `index.html`:
+Three bottom tabs — **Workout**, **Routines**, **History** — plus an exercise
+catalog nested inside Routines.
 
-- **Routines** — create a named routine, add/remove exercises
-- **Train** — pick a routine, log weight + reps per set, running timer,
-  delete a set, discard or finish the workout
-- **History** — past workouts, expandable detail, total kg lifted, delete
+- **Exercises** — master list, seeded with 20 on first run. Every routine and
+  workout references a catalog id, never a name, so renaming an exercise keeps
+  its entire history. Body part and equipment are fixed pick-lists.
+- **Routines** — named list of exercises picked from the catalog, each with a
+  target set count (default 4).
+- **Workout** — log weight + reps per set, running timer, "last time" shown
+  under each exercise, delete a set, discard or finish.
+- **History** — past workouts, expandable detail, total kg lifted, delete.
+- **Backup** — Supabase, optional and never blocking. Logged out, everything
+  still works and a quiet banner offers login.
+- **Offline** — service worker caches the app shell, the font and the Supabase
+  library. Cold opens with no signal.
 
-Data model, stored as one JSON blob in `localStorage` under key `rack.v1`:
+Data model, one JSON blob in `localStorage` under key `rack.v1`:
 
 ```
 {
-  routines: [{ id, name, exercises: [{ id, name }] }],
-  workouts: [{ id, routineId, routineName, startedAt, endedAt,
-               entries: [{ name, sets: [{ w, r }] }] }],
-  active:   null | { id, routineId, routineName, startedAt, entries: [...] }
+  exercises: [{ id, name, bodyPart, equipment, deleted, updatedAt, dirty }],
+  routines:  [{ id, name, deleted, updatedAt, dirty,
+                exercises: [{ id, exerciseId, name, sets }] }],
+  workouts:  [{ id, routineId, routineName, startedAt, endedAt,
+                deleted, updatedAt, dirty,
+                entries: [{ exerciseId, name, target, sets: [{ w, r }] }] }],
+  active:    null | { ...in-progress workout... },
+  syncCursor: 0, seeded: false
 }
 ```
 
-`w` is weight in kg, `r` is reps. `active` is the in-progress workout, saved on
-every change so nothing is lost if the app is closed mid-session.
+`w` is kg, `r` is reps. `active` is the in-progress workout, saved on every
+change and deliberately **never synced** — it is local to one device.
 
-UI: dark, industrial. Safety-yellow accent (`#F0B429`) on near-black
-(`#17191A`), Archivo from Google Fonts, tabular numerals. Bottom tab bar for
-thumb reach. Weight/reps use −/+ steppers (2.5kg and 1 rep) and pre-fill from
-the previous set.
+The `name` on routine slots and workout entries is a **display fallback only**;
+always resolve through `exName(exerciseId, name)` so renames propagate. Seeded
+exercises use deterministic ids (`seed:<slug>`) with `updatedAt: 1`, so every
+device generates identical ids and merges instead of duplicating, and any real
+edit always wins the merge.
+
+UI: light. White background, cool blue-grey cards, amber accent (`#F5A900`).
+Each tab owns a colour — Workout amber, Routines blue, History green — carried
+through its nav pill, eyebrow labels and chevrons via a `--section` variable.
+Archivo from Google Fonts, tabular numerals. Weight/reps use −/+ steppers
+(2.5 kg and 1 rep) and pre-fill from the previous set.
 
 ## Roadmap
 
 Phase 1 — log a set, routines, history — **done**
-Phase 2 — service worker + manifest: full offline, clean updates on push
-Phase 3 — show last session's performance inline under each exercise
-Phase 4 — use it for two weeks, change nothing, then fix what actually annoys
-Phase 5 — cloud sync (Supabase leading) for backup and cross-device
+Phase 2 — service worker + manifest: full offline, clean updates — **done**
+Phase 3 — show last session's performance inline under each exercise — **done**
+Phase 5 — cloud sync (Supabase) for backup and cross-device — **done**
+Exercise catalog — master list with stable ids — **done** (unblocks Phase 6)
+
+Phase 4 — **next**: use it for two weeks, change nothing, then fix what
+actually annoys. Do not build ahead of this.
 Phase 6 — charts: weight over time per exercise, personal bests
+
+Known gaps, ranked by how likely they are to bite, for when Phase 4 says so:
+
+1. **No way to change a workout once started** — if a machine is taken you
+   cannot add or swap an exercise mid-session, so you log it under the wrong
+   exercise, which is exactly what the catalog exists to prevent.
+2. **Backup can fail silently** — a failed sync shows only a small corner
+   badge. No "last backed up" you can actually see.
+3. **Cannot fix a set after finishing** — only deleting the whole workout.
+4. Cannot rename a routine or reorder its exercises.
 
 Later, only if wanted: rest timer, plate calculator, export, cardio.
 

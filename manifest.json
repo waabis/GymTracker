@@ -1,0 +1,19 @@
+{
+  "name": "Rack",
+  "short_name": "Rack",
+  "description": "Personal workout tracker",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAACd0lEQVR42u3dPU7DQBCAUbJyTxklF0CioOIGnIVTcSIkKgokjsENaCgROOvd7Oz4vYqChM34w46t/ByOp/MN/KYYAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8TB/5Yed/r5crvm1+6ev/Yz6Blncmj71aErR7CrROadSRk7hepbJS4jzkzK2Cnk7mP2mZThU8jaR4KZOFuhZxytAs+088gxE3sOxIE4EAfiYKgl/hL/eMZ+tcvMEdZgz3HZudx1zvQirEEcNXPvvW0irEEc9RPvt20irEEcW2fdY9tEWIM4EAfiQByIA3GAOBAH4kAciANxIA6mF+uVYB/vbz8/vT7V37aVLWu4/LZtH9f9w6M9Bx3/VcShj25xtN+ZE6aPogx9OKwgDsSBOJg2jiZXWuhqyzYqA/82kctwWFGGOJRRZYn5kCreWtj8ALdlDQ3fGjnwwG3PgTgQB+JAHIgDcSAOxIE4EAeIA3GQN45LP22+x6fTR1iDOLbOut9WibAGcdRPvPdWibAGcdTM/TpbJcIahpjgy3giTD9xAc5WEAfiQByIg8RxtHomn+mMIMdM7DnoHMf2wPNdSEgwkxJhFlkvMc0+kzJ8FrkvPk49k8PxdG5+pyvfRryra9IzzqRLHHhCijgQB4gDcSAOxIE4EAfiQByIA3GAOBAH4kAciANxIA7EgTgQB+IwAsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8SBOBAH4kAciANxIA6y+Qabo6PKDjwGoAAAAABJRU5ErkJggg==",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
