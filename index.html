@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
 :root{
   --bg:#17191A; --surface:#212426; --surface2:#2A2E31; --line:#383D40;
@@ -91,17 +92,35 @@ nav button.on{color:var(--accent)}
 <body>
 <div id="app"><div id="main"></div></div>
 <nav><div id="tabs"></div></nav>
+<div id="syncBadge" class="muted" style="position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:14px;font-size:11px;z-index:21;cursor:pointer"></div>
 
 <script>
 const KEY='rack.v1';
-const uid=()=>Math.random().toString(36).slice(2,10);
-let db={routines:[],workouts:[],active:null};
+const uid=()=>(crypto.randomUUID?crypto.randomUUID():
+  'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{
+    const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);}));
+let db={routines:[],workouts:[],active:null,syncCursor:0};
 let view={t:'train'};
-let ui={pending:null,err:null,ekey:null,nostore:false};
+let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false};
 let tick=null;
 
-function load(){try{const r=localStorage.getItem(KEY);if(r)db=Object.assign(db,JSON.parse(r));}catch(e){ui.nostore=true;}}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){ui.nostore=true;}}
+/* ---------- sync (Phase 5) ---------- */
+const SUPABASE_URL='https://ahvzifwrwnczoeoltymo.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFodnppZndyd25jem9lb2x0eW1vIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4Njc0NDksImV4cCI6MjEwMTQ0MzQ0OX0.QHSzoLK48QU0PGukqjGwI4KewXEofQt2qIJbaVxOyY8';
+let sb=null,session=null,sync={status:'idle',err:null},syncing=false,syncTimer=null;
+
+function load(){
+  try{const r=localStorage.getItem(KEY);if(r)db=Object.assign(db,JSON.parse(r));}catch(e){ui.nostore=true;}
+  if(db.syncCursor==null)db.syncCursor=0;
+  const migrate=x=>{if(x.updatedAt==null){x.updatedAt=Date.now();x.dirty=true;}if(x.deleted==null)x.deleted=false;};
+  db.routines.forEach(migrate);db.workouts.forEach(migrate);
+}
+function save(sync_){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){ui.nostore=true;}
+  if(sync_!==false)scheduleSync();}
+function scheduleSync(){clearTimeout(syncTimer);syncTimer=setTimeout(()=>syncNow('write'),400);}
+function touch(row){row.updatedAt=Date.now();row.dirty=true;}
+const activeRoutines=()=>db.routines.filter(r=>!r.deleted);
+const activeWorkouts=()=>db.workouts.filter(w=>!w.deleted);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtW=w=>(Math.round(w*100)/100).toString();
 function fmtDate(ms){const d=new Date(ms);return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
@@ -112,10 +131,38 @@ function errAt(k){return ui.ekey===k&&ui.err?`<div class="err">${esc(ui.err)}</d
 function ask(k){ui.pending=k;ui.err=null;render();}
 function cancel(){ui.pending=null;render();}
 
+/* ---------- auth ---------- */
+function toggleLogin(){ui.loginOpen=!ui.loginOpen;ui.err=null;render();
+  if(ui.loginOpen)setTimeout(()=>{const e=document.getElementById('loginEmail');if(e)e.focus();},30);}
+function vAuthBanner(){
+  if(!ui.loginOpen)return `<div class="warn" style="cursor:pointer" onclick="toggleLogin()">Not backed up &mdash; tap to log in</div>`;
+  return `<div class="warn">
+    <div style="font-weight:600;color:var(--text);margin-bottom:10px">Log in to back up</div>
+    <input id="loginEmail" placeholder="Email" autocapitalize="off" autocomplete="email" style="margin-bottom:8px">
+    <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')login()">
+    ${errAt('login')}
+    <div style="height:10px"></div>
+    <div class="row"><button class="back" onclick="toggleLogin()">Cancel</button>
+    <button class="btn sm" onclick="login()">Log in</button></div>
+  </div>`;
+}
+async function login(){
+  const email=(document.getElementById('loginEmail')||{}).value||'';
+  const pass=(document.getElementById('loginPass')||{}).value||'';
+  if(!email.trim()||!pass){fail('login','Enter your email and password.');return;}
+  if(!sb){fail('login',"Can't reach the login service right now.");return;}
+  const {error}=await sb.auth.signInWithPassword({email:email.trim(),password:pass});
+  if(error){fail('login',error.message||'Login failed.');return;}
+  ui.loginOpen=false;ui.err=null;render();
+}
+async function logout(){if(sb)await sb.auth.signOut();render();}
+
 /* ---------- views ---------- */
 function render(){
   const m=document.getElementById('main');
   let html = ui.nostore?`<div class="warn">Preview mode &mdash; nothing is being saved. On your phone it will save properly.</div>`:'';
+  if(!session)html+=vAuthBanner();
   if(db.active)html+=vActive();
   else if(view.t==='train')html+=vTrain();
   else if(view.t==='routines')html+=vRoutines();
@@ -127,15 +174,17 @@ function render(){
   clearInterval(tick);
   if(db.active){tick=setInterval(()=>{const e=document.getElementById('timer');
     if(e)e.textContent=dur(db.active.startedAt,Date.now());},1000);}
+  renderSyncBadge();
 }
 function go(t){view={t};ui.pending=null;ui.err=null;ui.ekey=null;render();window.scrollTo(0,0);}
 
 function vTrain(){
-  if(!db.routines.length) return `<h1>Train</h1>
+  const routines=activeRoutines();
+  if(!routines.length) return `<h1>Train</h1>
     <div class="empty">No routines yet.<br>Build one first, then start a workout.</div>
     <button class="btn" onclick="go('routines')">Create a routine</button>`;
   return `<h1>Train</h1><p class="eyebrow">Pick a routine</p>`+
-    db.routines.map(r=>`<button class="card tap" onclick="start('${r.id}')">
+    routines.map(r=>`<button class="card tap" onclick="start('${r.id}')">
       <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
       <div class="muted">${r.exercises.length} exercise${r.exercises.length===1?'':'s'}</div></div>
       <div style="color:var(--accent);font-weight:600;font-size:15px">Start</div></div></button>`).join('')
@@ -143,8 +192,9 @@ function vTrain(){
 }
 
 function vRoutines(){
+  const routines=activeRoutines();
   return `<h1>Routines</h1>`+
-    (db.routines.length?db.routines.map(r=>`<button class="card tap" onclick="openRoutine('${r.id}')">
+    (routines.length?routines.map(r=>`<button class="card tap" onclick="openRoutine('${r.id}')">
       <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
       <div class="muted">${r.exercises.map(e=>esc(e.name)).join(' \u00b7 ')||'No exercises'}</div></div>
       <div class="muted">&rsaquo;</div></div></button>`).join('')
@@ -158,7 +208,7 @@ function vRoutines(){
 }
 
 function vRoutine(){
-  const r=db.routines.find(x=>x.id===view.id); if(!r){go('routines');return'';}
+  const r=activeRoutines().find(x=>x.id===view.id); if(!r){go('routines');return'';}
   return `<div class="bar"><button class="back" onclick="go('routines')">&lsaquo; Routines</button>
       ${ui.pending==='delr'
         ? `<span><button class="back" onclick="cancel()">Cancel</button>
@@ -218,7 +268,7 @@ function vActive(){
 }
 
 function vHistory(){
-  const w=[...db.workouts].sort((a,b)=>b.startedAt-a.startedAt);
+  const w=activeWorkouts().sort((a,b)=>b.startedAt-a.startedAt);
   if(!w.length)return `<h1>History</h1><div class="empty">Finished workouts show up here.</div>`;
   return `<h1>History</h1>`+w.map(x=>{
     const sets=x.entries.reduce((n,e)=>n+e.sets.length,0);
@@ -235,22 +285,24 @@ function vHistory(){
           ? `<div class="row"><button class="back" onclick="cancel()">Cancel</button>
              <button class="danger" onclick="delWorkout('${x.id}')">Tap to confirm delete</button></div>`
           : `<button class="danger" onclick="ask('delw${x.id}')">Delete this workout</button>`):''}
-    </div>`;}).join('');
+    </div>`;}).join('')
+    +(session?`<div style="margin-top:20px"><button class="back" onclick="logout()">Log out</button></div>`:'');
 }
 
 /* ---------- actions ---------- */
 function newRoutine(){const el=document.getElementById('rname');const n=(el?el.value:'').trim();
   if(!n){fail('rname','Give the routine a name first.');return;}
-  const r={id:uid(),name:n,exercises:[]};db.routines.push(r);save();
+  const r={id:uid(),name:n,exercises:[],deleted:false};touch(r);db.routines.push(r);save();
   ui.err=null;view={t:'routine',id:r.id};render();window.scrollTo(0,0);}
 function openRoutine(id){view={t:'routine',id};ui.pending=null;render();window.scrollTo(0,0);}
-function delRoutine(id){db.routines=db.routines.filter(r=>r.id!==id);save();go('routines');}
+function delRoutine(id){const r=db.routines.find(x=>x.id===id);
+  if(r){r.deleted=true;touch(r);}save();go('routines');}
 function addEx(rid){const el=document.getElementById('exname');const n=el.value.trim();
   if(!n){fail('exname','Type an exercise name first.');return;}
-  db.routines.find(r=>r.id===rid).exercises.push({id:uid(),name:n});save();ui.err=null;render();
+  const r=db.routines.find(r=>r.id===rid);r.exercises.push({id:uid(),name:n});touch(r);save();ui.err=null;render();
   setTimeout(()=>{const e=document.getElementById('exname');if(e)e.focus();},30);}
 function delEx(rid,eid){const r=db.routines.find(x=>x.id===rid);
-  r.exercises=r.exercises.filter(e=>e.id!==eid);save();render();}
+  r.exercises=r.exercises.filter(e=>e.id!==eid);touch(r);save();render();}
 
 function start(rid){const r=db.routines.find(x=>x.id===rid);
   if(!r.exercises.length){fail('start','Add at least one exercise to this routine first.');return;}
@@ -269,16 +321,83 @@ function delSet(i,j){db.active.entries[i].sets.splice(j,1);save();render();}
 
 function finish(){const a=db.active;const done=a.entries.filter(e=>e.sets.length);
   if(!done.length){ui.pending=null;fail('fin','Log at least one set before finishing.');return;}
-  db.workouts.push({id:a.id,routineId:a.routineId,routineName:a.routineName,
-    startedAt:a.startedAt,endedAt:Date.now(),entries:done});
+  const w={id:a.id,routineId:a.routineId,routineName:a.routineName,
+    startedAt:a.startedAt,endedAt:Date.now(),entries:done,deleted:false};
+  touch(w);db.workouts.push(w);
   db.active=null;save();ui.pending=null;ui.err=null;view={t:'history',open:a.id};render();window.scrollTo(0,0);}
-function cancelWorkout(){db.active=null;save();go('train');}
+function cancelWorkout(){db.active=null;save(false);go('train');}
 function toggle(id){view={t:'history',open:view.open===id?null:id};ui.pending=null;render();}
-function delWorkout(id){db.workouts=db.workouts.filter(w=>w.id!==id);save();view={t:'history'};ui.pending=null;render();}
+function delWorkout(id){const w=db.workouts.find(x=>x.id===id);
+  if(w){w.deleted=true;touch(w);}save();view={t:'history'};ui.pending=null;render();}
+
+/* ---------- sync engine ---------- */
+function withTimeout(builder,ms){
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),ms||8000);
+  return builder.abortSignal(ctrl.signal).then(r=>{clearTimeout(t);return r;},e=>{clearTimeout(t);throw e;});
+}
+const toServerRoutine=(r,uidStr)=>({id:r.id,user_id:uidStr,name:r.name,exercises:r.exercises,
+  deleted:!!r.deleted,updated_at:r.updatedAt});
+const fromServerRoutine=row=>({id:row.id,name:row.name,exercises:row.exercises||[],
+  deleted:row.deleted,updatedAt:row.updated_at,dirty:false});
+const toServerWorkout=(w,uidStr)=>({id:w.id,user_id:uidStr,routine_id:w.routineId,routine_name:w.routineName,
+  started_at:w.startedAt,ended_at:w.endedAt,entries:w.entries,deleted:!!w.deleted,updated_at:w.updatedAt});
+const fromServerWorkout=row=>({id:row.id,routineId:row.routine_id,routineName:row.routine_name,
+  startedAt:row.started_at,endedAt:row.ended_at,entries:row.entries||[],
+  deleted:row.deleted,updatedAt:row.updated_at,dirty:false});
+function mergeRow(list,incoming){
+  const i=list.findIndex(x=>x.id===incoming.id);
+  if(i<0)list.push(incoming);
+  else if(incoming.updatedAt>list[i].updatedAt)list[i]=incoming;
+}
+async function pushOutbox(){
+  const uidStr=session.user.id;
+  const dr=db.routines.filter(r=>r.dirty),dw=db.workouts.filter(w=>w.dirty);
+  if(dr.length){const{error}=await withTimeout(sb.from('routines').upsert(dr.map(r=>toServerRoutine(r,uidStr))));
+    if(error)throw error;dr.forEach(r=>r.dirty=false);}
+  if(dw.length){const{error}=await withTimeout(sb.from('workouts').upsert(dw.map(w=>toServerWorkout(w,uidStr))));
+    if(error)throw error;dw.forEach(w=>w.dirty=false);}
+  if(dr.length||dw.length)save(false);
+}
+async function pullChanges(){
+  const uidStr=session.user.id;
+  const rr=await withTimeout(sb.from('routines').select('*').eq('user_id',uidStr).gt('updated_at',db.syncCursor));
+  if(rr.error)throw rr.error;
+  const wr=await withTimeout(sb.from('workouts').select('*').eq('user_id',uidStr).gt('updated_at',db.syncCursor));
+  if(wr.error)throw wr.error;
+  let maxTs=db.syncCursor;
+  rr.data.forEach(row=>{const c=fromServerRoutine(row);mergeRow(db.routines,c);if(c.updatedAt>maxTs)maxTs=c.updatedAt;});
+  wr.data.forEach(row=>{const c=fromServerWorkout(row);mergeRow(db.workouts,c);if(c.updatedAt>maxTs)maxTs=c.updatedAt;});
+  db.syncCursor=maxTs;save(false);
+}
+async function syncNow(trigger){
+  if(!session||!sb||syncing)return;
+  syncing=true;sync.status='syncing';sync.err=null;renderSyncBadge();
+  try{await pushOutbox();await pullChanges();sync.status='idle';
+    if(!db.active&&(view.t==='routines'||view.t==='history'||view.t==='train'))render();}
+  catch(e){sync.status='error';sync.err=(e&&e.message)||'Sync failed';}
+  syncing=false;renderSyncBadge();
+}
+function renderSyncBadge(){
+  const el=document.getElementById('syncBadge');if(!el)return;
+  if(!session||sync.status==='idle'){el.textContent='';el.onclick=null;return;}
+  if(sync.status==='syncing'){el.textContent='Syncing…';el.onclick=null;return;}
+  el.textContent='Sync error — tap to retry';el.onclick=()=>syncNow('retry');
+}
+function initSupabase(){
+  try{
+    if(window.supabase&&window.supabase.createClient){
+      sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+      sb.auth.onAuthStateChange((_evt,s)=>{session=s;render();if(s)syncNow('auth');});
+    }
+  }catch(e){}
+}
+window.addEventListener('online',()=>syncNow('online'));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')syncNow('foreground');});
 
 load();
 try{localStorage.setItem(KEY+'.t','1');localStorage.removeItem(KEY+'.t');}catch(e){ui.nostore=true;}
 render();
+initSupabase();
 </script>
 </body>
 </html>
