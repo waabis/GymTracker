@@ -430,7 +430,14 @@ function vActive(){
       ${ui.pending==='fin'
         ? `<span><button class="back" onclick="cancel()">Cancel</button>
            <button class="fin" style="margin-left:12px" onclick="finish()">Save it</button></span>`
-        : `<button class="fin" onclick="ask('fin')">Finish</button>`}</div>
+        : ui.pending==='disc'
+        ? `<span><button class="back" onclick="cancel()">Keep going</button>
+           <button class="danger" style="margin-left:14px" onclick="cancelWorkout()">Tap to discard</button></span>`
+        : `<span style="display:flex;align-items:center;gap:16px">
+           <button class="danger" onclick="ask('disc')">Discard</button>
+           <button class="fin" onclick="ask('fin')">Finish</button></span>`}</div>
+    ${ui.pending==='disc'?`<div class="warn" style="border-left-color:var(--danger)">
+      This throws away the sets you have logged. Nothing is saved.</div>`:''}
     ${errAt('fin')}
     ${a.entries.map((en,i)=>{
       const target=en.target||4;
@@ -460,13 +467,7 @@ function vActive(){
       </div>
       ${errAt('set'+i)}
       <button class="btn ghost" onclick="addSet(${i})">Log set</button>
-    </div>`;}).join('')}
-    <div style="height:8px"></div>
-    ${ui.pending==='disc'
-      ? `<div class="card"><div style="margin-bottom:12px">Discard this workout? Nothing will be saved.</div>
-         <div class="row"><button class="btn ghost sm" onclick="cancel()">Keep going</button>
-         <button class="btn sm" style="background:var(--danger);color:var(--danger-ink);box-shadow:none" onclick="cancelWorkout()">Discard</button></div></div>`
-      : `<button class="btn ghost" onclick="ask('disc')"><span class="danger">Discard workout</span></button>`}`;
+    </div>`;}).join('')}`;
 }
 
 function vHistory(){
