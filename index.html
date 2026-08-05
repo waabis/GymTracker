@@ -168,12 +168,6 @@ function routineColor(id){
   let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))>>>0;
   return ROUTINE_COLORS[h%ROUTINE_COLORS.length];
 }
-/* solid-fill card on a routine's colour: overriding these as custom
-   properties on the card lets every existing component (muted text,
-   labels, steppers, the chevron) stay legible without touching their
-   own CSS -- they already all read from these same variables. */
-const onColor=c=>`background:${c};--text:#fff;--muted:rgba(255,255,255,.82);`+
-  `--line:rgba(255,255,255,.3);--section:rgba(255,255,255,.82)`;
 const norm=s=>String(s||'').trim().toLowerCase();
 const seedId=name=>'seed:'+norm(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 function findOrCreateEx(name){
@@ -372,8 +366,8 @@ function vRoutines(){
   const routines=activeRoutines();
   return `<h1>Routines</h1>`+
     (routines.length?routines.map(r=>{const c=routineColor(r.id);
-      return `<button class="card tap" style="${onColor(c)}" onclick="openRoutine('${r.id}')">
-      <div class="row"><div><div style="font-weight:700">${esc(r.name)}</div>
+      return `<button class="card tap" style="border-left:4px solid ${c}" onclick="openRoutine('${r.id}')">
+      <div class="row"><div><div style="font-weight:700;color:${c}">${esc(r.name)}</div>
       <div class="muted">${r.exercises.map(e=>esc(exName(e.exerciseId,e.name))).join(' \u00b7 ')||'No exercises'}</div></div>
       <div class="chev">&rsaquo;</div></div></button>`;}).join('')
      :`<div class="empty">A routine is just a named list of exercises.<br>Push day, Legs, whatever you call it.</div>`)+
@@ -392,7 +386,6 @@ function vRoutines(){
 
 function vRoutine(){
   const r=activeRoutines().find(x=>x.id===view.id); if(!r){go('routines');return'';}
-  const c=routineColor(r.id);
   return `<div class="bar"><button class="back" onclick="go('routines')">&lsaquo; Routines</button>
       ${ui.pending==='delr'
         ? `<span><button class="back" onclick="cancel()">Cancel</button>
@@ -401,7 +394,7 @@ function vRoutine(){
     <h1>${esc(r.name)}</h1>
     <p class="eyebrow">Exercises</p>
     ${r.exercises.length?r.exercises.map((e,i)=>{const cat=exById(e.exerciseId);
-      return `<div class="card" style="${onColor(c)}">
+      return `<div class="card">
       <div class="row"><div style="font-weight:500">${i+1}. ${esc(exName(e.exerciseId,e.name))}</div>
       <button class="x" onclick="delEx('${r.id}','${e.id}')">&times;</button></div>
       ${cat?`<div class="muted" style="font-size:13px">${esc(cat.bodyPart)} · ${esc(cat.equipment)}</div>`:''}
