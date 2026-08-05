@@ -440,18 +440,11 @@ function vActive(){
       This throws away the sets you have logged. Nothing is saved.</div>`:''}
     ${errAt('fin')}
     ${a.entries.map((en,i)=>{
-      const target=en.target||4;
       const last=lastEntryFor(en.exerciseId,en.name);
       return `<div class="card">
       <div style="font-weight:600;margin-bottom:2px">${esc(exName(en.exerciseId,en.name))}</div>
       ${last?`<div class="muted" style="margin-bottom:6px">Last time: ${last.sets.map(s=>fmtW(s.w)+'kg×'+s.r).join(', ')}</div>`:''}
-      <div class="row" style="margin-bottom:4px">
-        <div class="muted">${en.sets.length} of ${target} set${target===1?'':'s'}</div>
-        <div style="display:flex;align-items:center;gap:2px">
-          <button class="x" onclick="adjustTarget(${i},-1)">&minus;</button>
-          <button class="x" onclick="adjustTarget(${i},1)">+</button>
-        </div>
-      </div>
+      <div class="muted" style="margin-bottom:4px">${en.sets.length} set${en.sets.length===1?'':'s'} logged</div>
       ${en.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
         <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div>
         <button class="x" onclick="delSet(${i},${j})">&times;</button></div>`).join('')}
@@ -466,7 +459,7 @@ function vActive(){
           <button onclick="bump(${i},'r',1)">+</button></div></div>
       </div>
       ${errAt('set'+i)}
-      <button class="btn ghost" onclick="addSet(${i})">Log set</button>
+      <button class="btn" onclick="addSet(${i})">Log set</button>
     </div>`;}).join('')}`;
 }
 
@@ -541,9 +534,7 @@ function start(rid){const r=db.routines.find(x=>x.id===rid);
   if(!r.exercises.length){fail('start','Add at least one exercise to this routine first.');return;}
   db.active={id:uid(),routineId:r.id,routineName:r.name,startedAt:Date.now(),
     entries:r.exercises.map(e=>({exerciseId:e.exerciseId,name:exName(e.exerciseId,e.name),
-      sets:[],target:e.sets||4}))};save();ui.err=null;render();window.scrollTo(0,0);}
-function adjustTarget(i,d){const en=db.active.entries[i];
-  en.target=Math.max(1,(en.target||4)+d);save();render();}
+      sets:[]}))};save();ui.err=null;render();window.scrollTo(0,0);}
 
 const nextW=en=>en.sets.length?fmtW(en.sets[en.sets.length-1].w):'20';
 const nextR=en=>en.sets.length?en.sets[en.sets.length-1].r:'8';
