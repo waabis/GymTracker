@@ -106,6 +106,12 @@ nav button.tab-history.on{color:var(--tab-history);background:rgba(21,128,61,.14
   font-size:14px;font-weight:500;color:var(--text)}
 .chip.on{background:var(--section,var(--accent));border-color:transparent;color:#fff;font-weight:600}
 .chip:active{transform:scale(.96)}
+
+.modal-backdrop{position:fixed;inset:0;background:rgba(23,26,28,.5);z-index:30;
+  display:flex;align-items:flex-end;justify-content:center}
+.modal-card{background:var(--bg);width:100%;max-width:520px;border-radius:20px 20px 0 0;
+  padding:20px var(--pad) calc(env(safe-area-inset-bottom) + 24px);
+  max-height:85vh;overflow-y:auto;box-shadow:0 -8px 30px rgba(23,26,28,.18)}
 </style>
 </head>
 <body>
@@ -120,7 +126,7 @@ const uid=()=>(crypto.randomUUID?crypto.randomUUID():
     const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);}));
 let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:false};
 let view={t:'train'};
-let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false};
+let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false,chartFor:null};
 let tick=null;
 
 /* ---------- exercise catalog ---------- */
@@ -223,6 +229,45 @@ const fmtW=w=>(Math.round(w*100)/100).toString();
 function fmtDate(ms){const d=new Date(ms);return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
 function dur(a,b){const m=Math.max(0,Math.round((b-a)/60000));return m<60?m+' min':Math.floor(m/60)+'h '+(m%60)+'m';}
 
+/* ---------- trend charts ---------- */
+/* volume = total kg moved that session; e1rm = Epley-estimated one-rep max
+   (w*(1+r/30)) of the best set that session. Both are per-workout points. */
+function exerciseSeries(exerciseId){
+  const rows=[];
+  activeWorkouts().forEach(w=>{
+    const en=w.entries.find(e=>e.exerciseId===exerciseId);
+    if(en&&en.sets.length)rows.push({date:w.startedAt,
+      vol:en.sets.reduce((s,x)=>s+x.w*x.r,0),
+      e1rm:Math.max(...en.sets.map(x=>x.w*(1+x.r/30)))});
+  });
+  if(db.active){
+    const en=db.active.entries.find(e=>e.exerciseId===exerciseId);
+    if(en&&en.sets.length)rows.push({date:db.active.startedAt,
+      vol:en.sets.reduce((s,x)=>s+x.w*x.r,0),
+      e1rm:Math.max(...en.sets.map(x=>x.w*(1+x.r/30)))});
+  }
+  return rows.sort((a,b)=>a.date-b.date);
+}
+function sparkline(points){
+  if(!points.length)return `<div class="empty" style="padding:20px">Not enough data yet.</div>`;
+  const w=280,h=130,pad=26;
+  const ys=points.map(p=>p.y),xs=points.map(p=>p.x);
+  const minY=Math.min(...ys),maxY=Math.max(...ys),spanY=(maxY-minY)||1;
+  const minX=Math.min(...xs),maxX=Math.max(...xs),spanX=(maxX-minX)||1;
+  const sx=x=>points.length===1?w/2:pad+(x-minX)/spanX*(w-2*pad);
+  const sy=y=>h-pad-(y-minY)/spanY*(h-2*pad);
+  const path=points.map((p,i)=>(i===0?'M':'L')+sx(p.x).toFixed(1)+','+sy(p.y).toFixed(1)).join(' ');
+  const dots=points.map(p=>`<circle cx="${sx(p.x).toFixed(1)}" cy="${sy(p.y).toFixed(1)}" r="4" fill="var(--accent-fg)"/>`).join('');
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:auto;overflow:visible">
+    <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="var(--line)"/>
+    <path d="${path}" fill="none" stroke="var(--accent-fg)" stroke-width="2.5"/>
+    ${dots}
+    <text x="${pad}" y="14" font-size="11" fill="var(--muted)">${Math.round(maxY)}</text>
+    <text x="${pad}" y="${h-8}" font-size="11" fill="var(--muted)">${fmtDate(minX)}</text>
+    <text x="${w-pad}" y="${h-8}" font-size="11" fill="var(--muted)" text-anchor="end">${fmtDate(maxX)}</text>
+  </svg>`;
+}
+
 function fail(k,m){ui.err=m;ui.ekey=k;render();}
 function errAt(k){return ui.ekey===k&&ui.err?`<div class="err">${esc(ui.err)}</div>`:'';}
 function ask(k){ui.pending=k;ui.err=null;render();}
@@ -270,6 +315,7 @@ function render(){
   else if(view.t==='exercises')html+=vExercises();
   else if(view.t==='exercise')html+=vExercise();
   else if(view.t==='history')html+=vHistory();
+  html+=vChartModal();
   m.innerHTML=html;
   const sect=db.active?'train':(ROUTINE_VIEWS.includes(view.t)?'routines':view.t);
   m.style.setProperty('--section',{train:'var(--accent-fg)',
@@ -441,8 +487,16 @@ function vActive(){
     ${errAt('fin')}
     ${a.entries.map((en,i)=>{
       const last=lastEntryFor(en.exerciseId,en.name);
+      const hasTrend=en.exerciseId&&exerciseSeries(en.exerciseId).length>0;
       return `<div class="card">
-      <div style="font-weight:600;margin-bottom:2px">${esc(exName(en.exerciseId,en.name))}</div>
+      <div class="row" style="margin-bottom:2px">
+        <div style="font-weight:600">${esc(exName(en.exerciseId,en.name))}</div>
+        ${hasTrend?`<button class="x" aria-label="View trend" onclick="openChart('${en.exerciseId}')">
+          <svg width="20" height="20" viewBox="0 0 20 20" style="vertical-align:-4px">
+            <path d="M3 15 L3 11 M8 15 L8 7 M13 15 L13 4 M18 15 L18 9" stroke="currentColor"
+              stroke-width="2" stroke-linecap="round" fill="none"/>
+          </svg></button>`:''}
+      </div>
       ${last?`<div class="muted" style="margin-bottom:6px">Last time: ${last.sets.map(s=>fmtW(s.w)+'kg×'+s.r).join(', ')}</div>`:''}
       <div class="muted" style="margin-bottom:4px">${en.sets.length} set${en.sets.length===1?'':'s'} logged</div>
       ${en.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
@@ -461,6 +515,27 @@ function vActive(){
       ${errAt('set'+i)}
       <button class="btn" onclick="addSet(${i})">Log set</button>
     </div>`;}).join('')}`;
+}
+
+function openChart(exerciseId){ui.chartFor=exerciseId;render();}
+function closeChart(){ui.chartFor=null;render();}
+function vChartModal(){
+  if(!ui.chartFor)return'';
+  const ex=exById(ui.chartFor); if(!ex){ui.chartFor=null;return'';}
+  const rows=exerciseSeries(ui.chartFor);
+  return `<div class="modal-backdrop" onclick="if(event.target===this)closeChart()">
+    <div class="modal-card">
+      <div class="row" style="margin-bottom:2px">
+        <h1 style="margin:0;font-size:20px">${esc(ex.name)}</h1>
+        <button class="x" onclick="closeChart()">&times;</button>
+      </div>
+      <p class="eyebrow" style="margin-top:20px">Total volume (kg)</p>
+      ${sparkline(rows.map(r=>({x:r.date,y:Math.round(r.vol)})))}
+      <p class="eyebrow" style="margin-top:24px">Estimated 1RM (kg)</p>
+      ${sparkline(rows.map(r=>({x:r.date,y:Math.round(r.e1rm)})))}
+      <div class="muted" style="margin-top:14px;font-size:13px">Estimated from your sets (Epley formula), not a tested max.</div>
+    </div>
+  </div>`;
 }
 
 function vHistory(){

@@ -53,7 +53,10 @@ catalog nested inside Routines.
 - **Routines** — named list of exercises picked from the catalog, each with a
   target set count (default 4).
 - **Workout** — log weight + reps per set, running timer, "last time" shown
-  under each exercise, delete a set, discard or finish.
+  under each exercise, delete a set, discard or finish. A trend icon on any
+  exercise with history opens a bottom-sheet modal (the app's only modal —
+  everything else is a full page) with two hand-rolled SVG charts: total
+  volume and Epley-estimated 1RM per workout, live-updating as you log.
 - **History** — past workouts, expandable detail, total kg lifted, delete.
 - **Backup** — Supabase, optional and never blocking. Logged out, everything
   still works and a quiet banner offers login.
@@ -96,11 +99,12 @@ Phase 1 — log a set, routines, history — **done**
 Phase 2 — service worker + manifest: full offline, clean updates — **done**
 Phase 3 — show last session's performance inline under each exercise — **done**
 Phase 5 — cloud sync (Supabase) for backup and cross-device — **done**
-Exercise catalog — master list with stable ids — **done** (unblocks Phase 6)
+Exercise catalog — master list with stable ids — **done** (unblocked Phase 6)
+Phase 6 — trend charts (volume, estimated 1RM) per exercise — **done**,
+built ahead of Phase 4 at the user's explicit request; flagged at the time.
 
-Phase 4 — **next**: use it for two weeks, change nothing, then fix what
-actually annoys. Do not build ahead of this.
-Phase 6 — charts: weight over time per exercise, personal bests
+Phase 4 — **next, for real this time**: use it for two weeks, change nothing,
+then fix what actually annoys. Nothing left on the roadmap to build ahead of.
 
 Known gaps, ranked by how likely they are to bite, for when Phase 4 says so:
 
