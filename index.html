@@ -159,6 +159,15 @@ const exName=(exerciseId,fallback)=>{const e=exById(exerciseId);
   return e?e.name:(fallback||'Unknown exercise');};
 const activeExercises=()=>db.exercises.filter(e=>!e.deleted);
 const ROUTINE_VIEWS=['routines','routine','picker','exercises','exercise'];
+/* deterministic per-routine colour: same routine always gets the same
+   colour, chosen from a fixed palette so it's always vivid and readable,
+   picked to stay clear of the app's own semantic colours (amber accent,
+   blue Routines-section, green History-section, red danger). */
+const ROUTINE_COLORS=['#7C3AED','#BE123C','#0F766E','#C2410C','#0E7490','#A21CAF','#4338CA','#854D0E'];
+function routineColor(id){
+  let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))>>>0;
+  return ROUTINE_COLORS[h%ROUTINE_COLORS.length];
+}
 const norm=s=>String(s||'').trim().toLowerCase();
 const seedId=name=>'seed:'+norm(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
 function findOrCreateEx(name){
@@ -345,10 +354,11 @@ function vTrain(){
 function vRoutines(){
   const routines=activeRoutines();
   return `<h1>Routines</h1>`+
-    (routines.length?routines.map(r=>`<button class="card tap" onclick="openRoutine('${r.id}')">
-      <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
+    (routines.length?routines.map(r=>{const c=routineColor(r.id);
+      return `<button class="card tap" style="border-left:4px solid ${c}" onclick="openRoutine('${r.id}')">
+      <div class="row"><div><div style="font-weight:700;color:${c}">${esc(r.name)}</div>
       <div class="muted">${r.exercises.map(e=>esc(exName(e.exerciseId,e.name))).join(' \u00b7 ')||'No exercises'}</div></div>
-      <div class="chev">&rsaquo;</div></div></button>`).join('')
+      <div class="chev">&rsaquo;</div></div></button>`;}).join('')
      :`<div class="empty">A routine is just a named list of exercises.<br>Push day, Legs, whatever you call it.</div>`)+
     `<div class="lbl" style="margin-top:20px">New routine</div>
      <input id="rname" placeholder="e.g. Push day" autocapitalize="sentences"
@@ -487,11 +497,10 @@ function vActive(){
     ${errAt('fin')}
     ${a.entries.map((en,i)=>{
       const last=lastEntryFor(en.exerciseId,en.name);
-      const hasTrend=en.exerciseId&&exerciseSeries(en.exerciseId).length>0;
       return `<div class="card">
       <div class="row" style="margin-bottom:2px">
         <div style="font-weight:600">${esc(exName(en.exerciseId,en.name))}</div>
-        ${hasTrend?`<button class="x" aria-label="View trend" onclick="openChart('${en.exerciseId}')">
+        ${en.exerciseId?`<button class="x" aria-label="View trend" onclick="openChart('${en.exerciseId}')">
           <svg width="20" height="20" viewBox="0 0 20 20" style="vertical-align:-4px">
             <path d="M3 15 L3 11 M8 15 L8 7 M13 15 L13 4 M18 15 L18 9" stroke="currentColor"
               stroke-width="2" stroke-linecap="round" fill="none"/>
