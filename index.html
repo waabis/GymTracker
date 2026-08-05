@@ -499,7 +499,6 @@ function vExercise(){
 
 function vActive(){
   const a=db.active;
-  const c=routineColor(a.routineId);
   return `<div class="bar"><div><div style="font-weight:600">${esc(a.routineName)}</div>
       <div class="timer" id="timer">${dur(a.startedAt,Date.now())}</div></div>
       ${ui.pending==='fin'
@@ -516,7 +515,7 @@ function vActive(){
     ${errAt('fin')}
     ${a.entries.map((en,i)=>{
       const last=lastEntryFor(en.exerciseId,en.name);
-      return `<div class="card" style="${onColor(c)}">
+      return `<div class="card">
       <div class="row" style="margin-bottom:2px">
         <div style="font-weight:600">${esc(exName(en.exerciseId,en.name))}</div>
         <div style="display:flex;align-items:center;gap:10px">
