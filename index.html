@@ -523,7 +523,7 @@ function newExercise(rid){const el=document.getElementById('newexname');
     fail('newex','That exercise is already in your list.');return;}
   const e=findOrCreateEx(n);save();ui.err=null;
   if(rid)pickExercise(rid,e.id);
-  else{view={t:'exercise',id:e.id};render();window.scrollTo(0,0);}}
+  else{view={t:'exercises'};ui.q='';render();window.scrollTo(0,0);}}
 function openExercise(id){view={t:'exercise',id};ui.pending=null;ui.err=null;
   render();window.scrollTo(0,0);}
 function renameExercise(id){const el=document.getElementById('exrename');
