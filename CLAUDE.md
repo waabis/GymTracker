@@ -49,33 +49,71 @@ These come from real use, not preference. Don't quietly trade them away.
 
 ## Current state
 
-Three bottom tabs — **Workout**, **Routines**, **History** — plus an exercise
-catalog nested inside Routines.
+Everything below already exists. Three bottom tabs — **Workout**, **Routines**,
+**History** — plus an exercise catalog nested inside Routines. Every screen is
+a full page; the trend chart is the app's only modal.
 
-- **Exercises** — master list, seeded with 20 on first run. Every routine and
-  workout references a catalog id, never a name, so renaming an exercise keeps
-  its entire history. Body part and equipment are fixed pick-lists.
-- **Routines** — named list of exercises picked from the catalog, each with a
-  target set count (default 4).
-- **Workout** — log weight + reps per set, running timer, "last time" shown
-  under each exercise, delete a set, discard or finish. The first set of each
-  exercise pre-fills from what you lifted last session, not a fixed 20 kg.
-  An exercise can be added mid-session from the catalog — same picker as the
-  routines, `view.id === '@active'` instead of a routine id — and it lands in
-  that workout only, never in the routine.
-  The other two tabs stay usable during a workout; a banner on them leads
-  back. A trend icon on any exercise with history opens a bottom-sheet modal
-  (the app's only modal — everything else is a full page) with two hand-rolled
-  SVG charts: total volume and Epley-estimated 1RM per workout, live-updating
-  as you log. A rest timer per exercise (default 120s, ±30s independently per
-  exercise) starts automatically when a set is logged and shows "Rest done"
-  once it elapses — visual only, no sound, since the app never uses
+**Workout tab**
+
+- Pick a routine and start. Each routine card carries its own colour, the same
+  one the Routines tab gives it.
+- Log a set: weight, reps and a tick button share **one row** (see constraint
+  2). −/+ steppers, 2.5 kg and 1 rep.
+- First set of each exercise pre-fills from what you lifted last session; every
+  set after that pre-fills from the set before it.
+- "Last time: 50kg×5, …" under each exercise, from its previous session.
+- Logged sets listed and numbered; tap × on one to delete it.
+- **Rest timer** per exercise, in the title row: a pill of `− m:ss +`, default
+  120s, ±30s independently per exercise. Starts itself when a set is logged,
+  turns amber while running and stays amber at 0:00. State is carried by
+  colour, not words. Visual only, no sound — the app never uses
   alert/confirm/prompt.
-- **History** — past workouts, expandable detail, total kg lifted, delete.
-- **Backup** — Supabase, optional and never blocking. Logged out, everything
-  still works and a quiet banner offers login.
-- **Offline** — service worker caches the app shell, the font and the Supabase
-  library. Cold opens with no signal.
+- **Workout clock** in the header, `hh:mm:ss`, ticking every second.
+- **Trend icon** on any exercise with history opens a bottom-sheet modal: two
+  hand-rolled SVG charts, total volume and Epley-estimated 1RM per workout,
+  live-updating as you log.
+- **"+ Add an exercise"** at the bottom opens the routines' own picker with
+  `view.id === '@active'`. It lands in that session only, never in the routine.
+  While that picker is open the nav reads Workout, not Routines.
+- Discard or Finish, both two-tap. Finish drops any entry with no sets logged.
+- The other two tabs stay usable mid-workout; a banner on them leads back.
+
+**Routines tab**
+
+- List of routines, each with a deterministic colour (stripe + name) shared
+  with the Workout tab.
+- **"+ New routine"** → its own screen for the name → Save lands you inside the
+  new routine, where you add exercises.
+- Inside a routine: add exercises from the catalog, remove one, set a target
+  set count (default 4), start the workout.
+- **Delete from the list** — × on the row, which becomes Cancel / Tap to
+  confirm. Same on the routine's own screen.
+- **"Manage exercises"** leads to the catalog.
+
+**Exercises (catalog)**
+
+- Master list, seeded with 20 on first run, grouped by body part, searchable.
+- Every routine and workout references a catalog id, never a name, so renaming
+  an exercise keeps its entire history.
+- **"+ New exercise"** → its own screen: name, body part, equipment, Save.
+  Untouched pick-lists fall back to Other. The picker keeps a faster inline
+  "create and add" for mid-flow use.
+- Rename, retag or delete an exercise from its own screen; delete straight from
+  the list row too. Deletes are soft — the row hides, its id keeps owning all
+  history.
+
+**History tab**
+
+- Past workouts, newest first, expandable to the individual sets. Total kg
+  lifted per workout. Delete a workout.
+
+**Backup and offline**
+
+- Supabase, optional and never blocking. Logged out, everything still works and
+  a quiet banner offers login.
+- Service worker caches the app shell, the font and the Supabase library. Cold
+  opens with no signal. A new version announces itself with an in-app banner
+  rather than reloading under you.
 
 Data model, one JSON blob in `localStorage` under key `rack.v1`:
 
@@ -105,7 +143,9 @@ UI: light. White background, cool blue-grey cards, amber accent (`#F5A900`).
 Each tab owns a colour — Workout amber, Routines blue, History green — carried
 through its nav pill, eyebrow labels and chevrons via a `--section` variable.
 Archivo from Google Fonts, tabular numerals. Weight/reps use −/+ steppers
-(2.5 kg and 1 rep) and pre-fill from the previous set.
+(2.5 kg and 1 rep) and pre-fill from the previous set. Each routine also owns a
+deterministic colour from its id (`routineColor()`), used wherever that routine
+appears. Deleting anything is a two-tap confirm in place, never a pop-up.
 
 ## Roadmap
 
@@ -117,10 +157,23 @@ Exercise catalog — master list with stable ids — **done** (unblocked Phase 6
 Phase 6 — trend charts (volume, estimated 1RM) per exercise — **done**,
 built ahead of Phase 4 at the user's explicit request; flagged at the time.
 
-Phase 4 — **next, for real this time**: use it for two weeks, change nothing,
-then fix what actually annoys. Nothing left on the roadmap to build ahead of.
+Phase 4 — **in progress since 6 Aug 2026**: use it, then fix what actually
+annoys. Nothing left on the roadmap to build ahead of.
 
-Known gaps, ranked by how likely they are to bite, for when Phase 4 says so:
+What real use has already asked for and got, all on 6 Aug 2026 — the pattern
+is small friction fixes, not features:
+
+- Rest timer made a proper control and moved into the exercise title row;
+  a decorative clock icon that did nothing was removed.
+- Log button became a tick, inline with weight and reps.
+- Workout clock in `hh:mm:ss` instead of "14 min".
+- Creating an exercise or a routine moved from an inline box at the foot of a
+  list onto its own screen.
+- Delete a routine or an exercise straight from its list row.
+- Routine colours carried onto the Workout tab.
+- Tab bar sat closer to the bottom edge in standalone.
+
+Known gaps, ranked by how likely they are to bite:
 
 1. ~~No way to change a workout once started~~ — **done**: "+ Add an exercise"
    at the bottom of a running workout opens the same picker the routines use,
@@ -130,7 +183,8 @@ Known gaps, ranked by how likely they are to bite, for when Phase 4 says so:
 2. **Backup can fail silently** — a failed sync shows only a small corner
    badge. No "last backed up" you can actually see.
 3. **Cannot fix a set after finishing** — only deleting the whole workout.
-4. Cannot rename a routine or reorder its exercises.
+4. Cannot rename a routine or reorder its exercises. (Deleting one, from the
+   list or from its own screen, does work.)
 
 Later, only if wanted: plate calculator, export, cardio.
 
