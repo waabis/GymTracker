@@ -55,6 +55,17 @@ input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(24
 button.card:active{transform:scale(.985);box-shadow:none}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .tap{width:100%;text-align:left}
+/* a list row that is tappable and also has its own delete cross — one button
+   cannot contain another, so the card is a div holding two buttons */
+.card.split{display:flex;align-items:center;gap:8px;padding-right:10px}
+.split .tap{flex:1;min-width:0;background:none}
+.split .tap:active{opacity:.55}
+.split .x{flex:none;font-size:26px;padding:10px}
+.rowdel{display:flex;align-items:center;gap:14px;flex:none}
+/* while confirming, Cancel + Tap to confirm need the width — drop the row to
+   its name so it stays one line instead of wrapping into a tall block */
+.confirming .tap .muted,.confirming .chev{display:none}
+.confirming .tap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .muted{color:var(--muted);font-size:14px}
 .empty{border:1px dashed var(--line);border-radius:var(--r);padding:28px 20px;text-align:center;
   color:var(--muted);margin-bottom:14px;background:var(--surface)}
@@ -429,14 +440,25 @@ function vTrain(){
     +errAt('start');
 }
 
+/* Delete straight from a list row. alert/confirm are banned (CLAUDE.md), so
+   the cross turns into Cancel / Tap to confirm for one tap — the same
+   two-tap shape the Delete button on the detail screens already uses. */
+function rowDelete(key,call){
+  return ui.pending===key
+    ? `<span class="rowdel"><button class="back" onclick="cancel()">Cancel</button>
+       <button class="danger" onclick="${call}">Tap to confirm</button></span>`
+    : `<button class="x" aria-label="Delete" onclick="ask('${key}')">&times;</button>`;
+}
 function vRoutines(){
   const routines=activeRoutines();
   return `<h1>Routines</h1>`+
     (routines.length?routines.map(r=>{const c=routineColor(r.id);
-      return `<button class="card tap" style="border-left:4px solid ${c}" onclick="openRoutine('${r.id}')">
-      <div class="row"><div><div style="font-weight:700;color:${c}">${esc(r.name)}</div>
-      <div class="muted">${r.exercises.map(e=>esc(exName(e.exerciseId,e.name))).join(' \u00b7 ')||'No exercises'}</div></div>
-      <div class="chev">&rsaquo;</div></div></button>`;}).join('')
+      return `<div class="card split ${ui.pending==='delr:'+r.id?'confirming':''}" style="border-left:4px solid ${c}">
+      <button class="tap" onclick="openRoutine('${r.id}')"><div class="row">
+        <div style="min-width:0"><div style="font-weight:700;color:${c}">${esc(r.name)}</div>
+        <div class="muted">${r.exercises.map(e=>esc(exName(e.exerciseId,e.name))).join(' \u00b7 ')||'No exercises'}</div></div>
+        <div class="chev">&rsaquo;</div></div></button>
+      ${rowDelete('delr:'+r.id,`delRoutine('${r.id}')`)}</div>`;}).join('')
      :`<div class="empty">A routine is just a named list of exercises.<br>Push day, Legs, whatever you call it.</div>`)+
     `<div style="height:20px"></div>
      <button class="btn" onclick="openNewRoutine()">+ New routine</button>
@@ -547,10 +569,12 @@ function vExercises(){
       value="${esc(ui.q)}" oninput="setQ(this.value)">
     <div style="height:14px"></div>
     ${groups.length?groups.map(([bp,items])=>`<p class="eyebrow">${esc(bp)}</p>`+
-      items.map(e=>`<button class="card tap" onclick="openExercise('${e.id}')"><div class="row">
-        <div><div style="font-weight:600">${esc(e.name)}</div>
-        <div class="muted">${esc(e.equipment)}</div></div>
-        <div class="chev">&rsaquo;</div></div></button>`).join('')).join('')
+      items.map(e=>`<div class="card split ${ui.pending==='delex:'+e.id?'confirming':''}">
+        <button class="tap" onclick="openExercise('${e.id}')"><div class="row">
+          <div style="min-width:0"><div style="font-weight:600">${esc(e.name)}</div>
+          <div class="muted">${esc(e.equipment)}</div></div>
+          <div class="chev">&rsaquo;</div></div></button>
+        ${rowDelete('delex:'+e.id,`delExercise('${e.id}')`)}</div>`).join('')).join('')
       :`<div class="empty">Nothing matches that.</div>`}
     <div style="height:20px"></div>
     <button class="btn" onclick="openNewExercise()">+ New exercise</button>`;
@@ -725,7 +749,10 @@ function newRoutine(){const el=document.getElementById('rname');
   ui.err=null;ui.newRoutineName='';view={t:'routine',id:r.id};render();window.scrollTo(0,0);}
 function openRoutine(id){view={t:'routine',id};ui.pending=null;render();window.scrollTo(0,0);}
 function delRoutine(id){const r=db.routines.find(x=>x.id===id);
-  if(r){r.deleted=true;touch(r);}save();go('routines');}
+  if(r){r.deleted=true;touch(r);}save();ui.pending=null;
+  /* deleting from the list stays on the list; from the routine screen it
+     has nowhere to stay, so it falls back to the list */
+  if(view.t==='routines')render();else go('routines');}
 function delEx(rid,eid){const r=db.routines.find(x=>x.id===rid);
   r.exercises=r.exercises.filter(e=>e.id!==eid);touch(r);save();render();}
 function adjustExSets(rid,eid,d){const r=db.routines.find(x=>x.id===rid);
@@ -785,7 +812,10 @@ function renameExercise(id){const el=document.getElementById('exrename');
 function setExerciseTag(id,field,value){const e=exById(id);
   e[field]=value;touch(e);save();render();}
 function delExercise(id){const e=exById(id);
-  if(e){e.deleted=true;touch(e);}save();go('exercises');}
+  if(e){e.deleted=true;touch(e);}save();ui.pending=null;
+  /* render(), not go(): go() clears the search, so deleting the third result
+     of "curl" would throw you back to the whole list */
+  if(view.t==='exercises')render();else go('exercises');}
 
 function start(rid){const r=db.routines.find(x=>x.id===rid);
   if(!r.exercises.length){fail('start','Add at least one exercise to this routine first.');return;}
