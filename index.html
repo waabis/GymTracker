@@ -107,6 +107,7 @@ button.card:active{transform:scale(.985);box-shadow:none}
 }
 .lbl{font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
   color:var(--muted);margin-bottom:4px}
+.plates{font-size:13px;margin-top:-2px}
 
 /* rest timer: one pill, sat in the exercise title row. No label — a m:ss
    clock with -/+ either side reads as a timer, and it turns amber the moment
@@ -183,7 +184,11 @@ let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updat
    from scratch, so without this any redraw — adjusting rest, deleting a set,
    logging a set on another exercise, opening a chart — silently threw your
    typed numbers away and put the defaults back. */
-function setDraft(k,v){ui.draft[k]=v;}
+function setDraft(k,v){ui.draft[k]=v;
+  /* the plate line is the only thing on screen that depends on the typed
+     weight, and render() would steal focus mid-typing — so patch it in place */
+  if(k[0]==='w'){const el=document.getElementById('plates-'+k.slice(1));
+    if(el)el.textContent=plateLine(parseFloat(v));}}
 const draftOr=(k,fallback)=>ui.draft[k]!=null?ui.draft[k]:fallback;
 function clearDraft(i){delete ui.draft['w'+i];delete ui.draft['r'+i];}
 let tick=null;
@@ -311,6 +316,25 @@ function fmtDate(ms){const d=new Date(ms);return d.toLocaleDateString('en-GB',{w
 function dur(a,b){const s=Math.max(0,Math.floor((b-a)/1000)),p=n=>String(n).padStart(2,'0');
   return `${p(Math.floor(s/3600))}:${p(Math.floor(s/60)%60)}:${p(s%60)}`;}
 function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
+
+/* ---------- plate calculator ---------- */
+/* One 20 kg Olympic bar and the plates a normal gym rack has, heaviest first.
+   Greedy is optimal here: every plate is a multiple of the next one down.
+   Shown only for barbell exercises — nothing to load on a cable stack. */
+const BAR_KG=20;
+const PLATES=[25,20,15,10,5,2.5,1.25];
+function plateLine(total){
+  if(!(total>0))return '';
+  if(total<BAR_KG)return `Lighter than the ${BAR_KG} kg bar`;
+  if(total===BAR_KG)return `${BAR_KG} kg bar, no plates`;
+  let side=Math.round((total-BAR_KG)/2*100)/100;
+  const out=[];
+  PLATES.forEach(p=>{while(side>=p-0.001){out.push(fmtW(p));side=Math.round((side-p)*100)/100;}});
+  if(!out.length)return `${BAR_KG} kg bar + ${fmtW(side)} kg per side (no plate that small)`;
+  /* a remainder means the gym's plates cannot make this number exactly */
+  return `${BAR_KG} kg bar + ${out.join(' · ')} per side`
+    +(side>0.001?` (${fmtW(side)} kg short)`:'');
+}
 const restState=en=>!en.restEndsAt?'idle':(en.restEndsAt-Date.now()>0?'on':'done');
 /* the clock is its own element so the 1s tick can rewrite just the digits */
 function restTime(en){
@@ -693,6 +717,8 @@ function vActive(){
               stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           </svg></button>
       </div>
+      ${(exById(en.exerciseId)||{}).equipment==='Barbell'
+        ? `<div class="muted plates" id="plates-${i}">${plateLine(parseFloat(draftOr('w'+i,nextW(en))))}</div>`:''}
       ${errAt('set'+i)}
     </div>`;}).join('')}
     <button class="btn ghost" onclick="openPicker('${ACTIVE_PICK}')">+ Add an exercise</button>

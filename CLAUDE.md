@@ -68,6 +68,10 @@ a full page; the trend chart is the app's only modal.
   turns amber while running and stays amber at 0:00. State is carried by
   colour, not words. Visual only, no sound — the app never uses
   alert/confirm/prompt.
+- **Plate calculator** under the weight, for exercises tagged Barbell only:
+  "20 kg bar + 25 · 20 · 2.5 per side", updating as you type or tap ±. Assumes
+  a 20 kg bar and 25/20/15/10/5/2.5/1.25 plates, both hard-coded — no settings
+  screen. Says so when the number is under the bar or cannot be made exactly.
 - **Workout clock** in the header, `hh:mm:ss`, ticking every second.
 - **Trend icon** on any exercise with history opens a bottom-sheet modal: two
   hand-rolled SVG charts, total volume and Epley-estimated 1RM per workout,
@@ -172,6 +176,7 @@ is small friction fixes, not features:
 - Delete a routine or an exercise straight from its list row.
 - Routine colours carried onto the Workout tab.
 - Tab bar sat closer to the bottom edge in standalone.
+- Plate calculator under the weight on barbell exercises.
 
 Known gaps, ranked by how likely they are to bite:
 
@@ -186,7 +191,7 @@ Known gaps, ranked by how likely they are to bite:
 4. Cannot rename a routine or reorder its exercises. (Deleting one, from the
    list or from its own screen, does work.)
 
-Later, only if wanted: plate calculator, export, cardio.
+Later, only if wanted: export, cardio. (Plate calculator — done 6 Aug 2026.)
 
 ### Phase 5 design, already decided
 
