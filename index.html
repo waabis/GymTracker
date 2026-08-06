@@ -74,15 +74,28 @@ button.card:active{transform:scale(.985);box-shadow:none}
 .step input{border:0;border-radius:0;background:transparent;text-align:center;
   font-size:19px;font-weight:600;padding:12px 0;min-width:0;box-shadow:none;color:var(--ink)}
 .step input:focus{outline:none;box-shadow:none}
-.step .unit{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
-  color:var(--muted);padding-right:4px;flex:none}
-/* steppers stacked on the left, one tall Log button on the right: the log
-   target sits next to the numbers without stealing width from the steppers */
-.pair{display:grid;grid-template-columns:1fr 92px;gap:10px;margin:12px 0 10px}
-.pair-inputs{display:grid;gap:8px}
-.btn.log{height:100%;padding:0;font-size:16px;line-height:1.2}
-.lbl{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
-  color:var(--muted);margin-bottom:5px}
+/* one row: weight, reps, log. A phone is ~310px of card, so the two steppers
+   and the log button all have to come out of that — the stepper buttons are
+   40px wide here instead of 52. Their height stays 52, so the tap target is
+   still a fat 40x52 rectangle. This is the one place the steppers give up
+   width, and it buys back a whole row of height. */
+/* weight gets the wider column — it can be "137.5", reps is never more than
+   two digits, so an even split would clip the number that matters most */
+.pair{display:grid;grid-template-columns:1.1fr .9fr 52px;gap:6px;align-items:end;margin:12px 0 10px}
+.pair .step button{width:40px;font-size:22px}
+.pair .step input{font-size:17px}
+/* grid, not the flex .btn gives it: a flex item will not wrap "Log set" onto
+   two lines inside a 52px button, it just overflows */
+.btn.log{display:grid;place-items:center;text-align:center;
+  height:52px;padding:0 4px;font-size:15px;line-height:1.15;box-shadow:none}
+/* below ~370px (mini, old SE) three columns leaves no room for the numbers,
+   so the log button drops to its own full-width row */
+@media (max-width:370px){
+  .pair{grid-template-columns:1fr 1fr}
+  .btn.log{grid-column:1/-1;height:48px;margin-top:2px}
+}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);margin-bottom:4px}
 
 /* rest timer: one pill, big enough to hit mid-set */
 .rest{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
@@ -590,21 +603,17 @@ function vActive(){
         <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div>
         <button class="x" onclick="delSet(${i},${j})">&times;</button></div>`).join('')}
       <div class="pair">
-        <div class="pair-inputs">
-          <div class="step">
-            <button onclick="bump(${i},'w',-2.5)">&minus;</button>
-            <input id="w${i}" inputmode="decimal" value="${esc(draftOr('w'+i,nextW(en)))}"
-              oninput="setDraft('w${i}',this.value)" onfocus="this.select()">
-            <span class="unit">kg</span>
-            <button onclick="bump(${i},'w',2.5)">+</button></div>
-          <div class="step">
-            <button onclick="bump(${i},'r',-1)">&minus;</button>
-            <input id="r${i}" inputmode="numeric" value="${esc(draftOr('r'+i,nextR(en)))}"
-              oninput="setDraft('r${i}',this.value)" onfocus="this.select()">
-            <span class="unit">reps</span>
-            <button onclick="bump(${i},'r',1)">+</button></div>
-        </div>
-        <button class="btn log" onclick="addSet(${i})"><span>Log<br>set</span></button>
+        <div><div class="lbl">Weight</div><div class="step">
+          <button onclick="bump(${i},'w',-2.5)">&minus;</button>
+          <input id="w${i}" inputmode="decimal" value="${esc(draftOr('w'+i,nextW(en)))}"
+            oninput="setDraft('w${i}',this.value)" onfocus="this.select()">
+          <button onclick="bump(${i},'w',2.5)">+</button></div></div>
+        <div><div class="lbl">Reps</div><div class="step">
+          <button onclick="bump(${i},'r',-1)">&minus;</button>
+          <input id="r${i}" inputmode="numeric" value="${esc(draftOr('r'+i,nextR(en)))}"
+            oninput="setDraft('r${i}',this.value)" onfocus="this.select()">
+          <button onclick="bump(${i},'r',1)">+</button></div></div>
+        <button class="btn log" onclick="addSet(${i})">Log set</button>
       </div>
       ${errAt('set'+i)}
     </div>`;}).join('')}`;

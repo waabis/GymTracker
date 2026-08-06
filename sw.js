@@ -7,7 +7,7 @@
  * All paths are relative on purpose: the app lives at /GymTracker/ on GitHub
  * Pages but at / when served locally, and relative paths work in both.
  */
-const CACHE='rack-v12';
+const CACHE='rack-v13';
 
 /* Must cache for the app to open at all. */
 const CORE=['./','./index.html','./manifest.json'];

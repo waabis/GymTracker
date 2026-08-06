@@ -29,7 +29,12 @@ These come from real use, not preference. Don't quietly trade them away.
 1. **Works with no signal.** Gyms are basements. Any feature that needs the
    network to complete a set log is wrong.
 2. **Fast to log.** Two taps per set, one-handed, sweaty fingers. Big touch
-   targets. Never shrink the steppers to fit more on screen.
+   targets. Never shrink the steppers to fit more on screen. One deliberate
+   exception, made on 6 Aug 2026: weight, reps and Log set now share a single
+   row, so the −/+ buttons are 40px wide instead of 52. Their height is still
+   52, so each is a 40×52 target. Below 370px wide even that does not fit and
+   the Log button drops to its own row. If this feels bad in the gym, undo it —
+   the row is one grid-template-columns line.
 3. **Never lose an in-progress workout.** Persist on every change, not on
    "finish".
 4. **No browser pop-ups.** `alert()`, `confirm()` and `prompt()` are banned —
