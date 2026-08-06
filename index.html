@@ -74,9 +74,28 @@ button.card:active{transform:scale(.985);box-shadow:none}
 .step input{border:0;border-radius:0;background:transparent;text-align:center;
   font-size:19px;font-weight:600;padding:12px 0;min-width:0;box-shadow:none;color:var(--ink)}
 .step input:focus{outline:none;box-shadow:none}
-.pair{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 10px}
+.step .unit{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--muted);padding-right:4px;flex:none}
+/* steppers stacked on the left, one tall Log button on the right: the log
+   target sits next to the numbers without stealing width from the steppers */
+.pair{display:grid;grid-template-columns:1fr 92px;gap:10px;margin:12px 0 10px}
+.pair-inputs{display:grid;gap:8px}
+.btn.log{height:100%;padding:0;font-size:16px;line-height:1.2}
 .lbl{font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;
   color:var(--muted);margin-bottom:5px}
+
+/* rest timer: one pill, big enough to hit mid-set */
+.rest{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px}
+.rest-lbl{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.rest-ctl{display:flex;align-items:center;background:var(--surface2);
+  border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.rest-ctl button{width:46px;height:42px;font-size:22px;font-weight:600;color:var(--accent-fg);flex:none}
+.rest-ctl button:active{background:var(--line)}
+.rest-time{min-width:62px;text-align:center;font-size:18px;font-weight:700;
+  font-variant-numeric:tabular-nums;color:var(--text)}
+.rest.on .rest-lbl,.rest.done .rest-lbl{color:var(--accent-fg)}
+.rest.on .rest-ctl,.rest.done .rest-ctl{border-color:var(--accent);background:rgba(245,169,0,.14)}
+.rest.on .rest-time,.rest.done .rest-time{color:var(--accent-fg)}
 
 nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.85);
   backdrop-filter:blur(16px);border-top:1px solid var(--line);
@@ -257,13 +276,15 @@ const fmtW=w=>(Math.round(w*100)/100).toString();
 function fmtDate(ms){const d=new Date(ms);return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
 function dur(a,b){const m=Math.max(0,Math.round((b-a)/60000));return m<60?m+' min':Math.floor(m/60)+'h '+(m%60)+'m';}
 function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
-function restLabel(en){
-  if(!en.restEndsAt)return `Rest: ${fmtClock(en.rest||120)}`;
-  const remain=(en.restEndsAt-Date.now())/1000;
-  return remain>0?`Resting… ${fmtClock(remain)}`:'Rest done';
-}
 const restState=en=>!en.restEndsAt?'idle':(en.restEndsAt-Date.now()>0?'on':'done');
-const restStyle=en=>restState(en)==='idle'?'':'font-weight:700;color:var(--text)';
+/* the clock is its own element so the 1s tick can rewrite just the digits */
+function restTime(en){
+  const st=restState(en);
+  if(st==='idle')return fmtClock(en.rest||120);
+  if(st==='done')return '0:00';
+  return fmtClock((en.restEndsAt-Date.now())/1000);
+}
+const restWord=en=>({idle:'Rest',on:'Resting',done:'Rest done'})[restState(en)];
 
 /* ---------- trend charts ---------- */
 /* volume = total kg moved that session; e1rm = Epley-estimated one-rep max
@@ -362,7 +383,9 @@ function render(){
   if(db.active&&view.t==='train'){tick=setInterval(()=>{const e=document.getElementById('timer');
     if(e)e.textContent=dur(db.active.startedAt,Date.now());
     db.active.entries.forEach((en,i)=>{const re=document.getElementById('rest-'+i);
-      if(!re)return;re.textContent=restLabel(en);re.style.cssText='font-size:14px;'+restStyle(en);});
+      if(!re)return;re.textContent=restTime(en);
+      document.getElementById('restlbl-'+i).textContent=restWord(en);
+      document.getElementById('restrow-'+i).className='rest '+restState(en);});
   },1000);}
   renderSyncBadge();
 }
@@ -553,11 +576,12 @@ function vActive(){
           </svg></button>`:''}
         </div>
       </div>
-      <div class="row" style="margin-bottom:6px">
-        <div class="muted" id="rest-${i}" style="${restStyle(en)}">${restLabel(en)}</div>
-        <div style="display:flex;align-items:center;gap:2px">
-          <button class="x" onclick="adjustRest(${i},-30)">&minus;</button>
-          <button class="x" onclick="adjustRest(${i},30)">+</button>
+      <div class="rest ${restState(en)}" id="restrow-${i}">
+        <span class="rest-lbl" id="restlbl-${i}">${restWord(en)}</span>
+        <div class="rest-ctl">
+          <button aria-label="Less rest" onclick="adjustRest(${i},-30)">&minus;</button>
+          <span class="rest-time" id="rest-${i}">${restTime(en)}</span>
+          <button aria-label="More rest" onclick="adjustRest(${i},30)">+</button>
         </div>
       </div>
       ${last?`<div class="muted" style="margin-bottom:6px">Last time: ${last.sets.map(s=>fmtW(s.w)+'kg×'+s.r).join(', ')}</div>`:''}
@@ -566,19 +590,23 @@ function vActive(){
         <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div>
         <button class="x" onclick="delSet(${i},${j})">&times;</button></div>`).join('')}
       <div class="pair">
-        <div><div class="lbl">Weight (kg)</div><div class="step">
-          <button onclick="bump(${i},'w',-2.5)">&minus;</button>
-          <input id="w${i}" inputmode="decimal" value="${esc(draftOr('w'+i,nextW(en)))}"
-            oninput="setDraft('w${i}',this.value)" onfocus="this.select()">
-          <button onclick="bump(${i},'w',2.5)">+</button></div></div>
-        <div><div class="lbl">Reps</div><div class="step">
-          <button onclick="bump(${i},'r',-1)">&minus;</button>
-          <input id="r${i}" inputmode="numeric" value="${esc(draftOr('r'+i,nextR(en)))}"
-            oninput="setDraft('r${i}',this.value)" onfocus="this.select()">
-          <button onclick="bump(${i},'r',1)">+</button></div></div>
+        <div class="pair-inputs">
+          <div class="step">
+            <button onclick="bump(${i},'w',-2.5)">&minus;</button>
+            <input id="w${i}" inputmode="decimal" value="${esc(draftOr('w'+i,nextW(en)))}"
+              oninput="setDraft('w${i}',this.value)" onfocus="this.select()">
+            <span class="unit">kg</span>
+            <button onclick="bump(${i},'w',2.5)">+</button></div>
+          <div class="step">
+            <button onclick="bump(${i},'r',-1)">&minus;</button>
+            <input id="r${i}" inputmode="numeric" value="${esc(draftOr('r'+i,nextR(en)))}"
+              oninput="setDraft('r${i}',this.value)" onfocus="this.select()">
+            <span class="unit">reps</span>
+            <button onclick="bump(${i},'r',1)">+</button></div>
+        </div>
+        <button class="btn log" onclick="addSet(${i})"><span>Log<br>set</span></button>
       </div>
       ${errAt('set'+i)}
-      <button class="btn" onclick="addSet(${i})">Log set</button>
     </div>`;}).join('')}`;
 }
 
