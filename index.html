@@ -382,7 +382,9 @@ function render(){
      on screen, which just looked broken. */
   if(db.active&&view.t==='train')html+=vActive();
   else{
-    if(db.active)html+=vResume();
+    /* the picker opened from a running workout is part of that workout, so no
+       "still in progress" nudge — its back button already goes there */
+    if(db.active&&!pickingForActive())html+=vResume();
     if(view.t==='train')html+=vTrain();
     else if(view.t==='routines')html+=vRoutines();
     else if(view.t==='routine')html+=vRoutine();
@@ -393,7 +395,7 @@ function render(){
   }
   html+=vChartModal();
   m.innerHTML=html;
-  const sect=ROUTINE_VIEWS.includes(view.t)?'routines':view.t;
+  const sect=pickingForActive()?'train':ROUTINE_VIEWS.includes(view.t)?'routines':view.t;
   m.style.setProperty('--section',{train:'var(--accent-fg)',
     routines:'var(--tab-routines)',history:'var(--tab-history)'}[sect]||'var(--muted)');
   document.getElementById('tabs').innerHTML=[['train','Workout'],['routines','Routines'],['history','History']]
@@ -490,28 +492,39 @@ function exGroups(q){
   return Object.keys(byBp).sort((a,b)=>order(a)-order(b)||a.localeCompare(b))
     .map(bp=>[bp,byBp[bp].sort((a,b)=>a.name.localeCompare(b.name))]);
 }
+/* Fills either a routine or the workout running right now — view.id is the
+   routine id, or ACTIVE_PICK for the workout. Same list, same search, same
+   "create and add", so a machine being taken mid-session costs three taps. */
+const ACTIVE_PICK='@active';
+const pickingForActive=()=>view.t==='picker'&&view.id===ACTIVE_PICK&&!!db.active;
 function vPicker(){
-  const r=activeRoutines().find(x=>x.id===view.id);
-  if(!r){view={t:'routines'};ui.pending=null;return vRoutines();}
+  const toActive=view.id===ACTIVE_PICK;
+  if(toActive&&!db.active){view={t:'train'};return vTrain();}
+  const r=toActive?null:activeRoutines().find(x=>x.id===view.id);
+  if(!toActive&&!r){view={t:'routines'};ui.pending=null;return vRoutines();}
+  const target=toActive?ACTIVE_PICK:r.id;
+  const used=id=>toActive?db.active.entries.some(e=>e.exerciseId===id)
+                         :r.exercises.some(x=>x.exerciseId===id);
   const groups=exGroups(ui.q);
-  return `<div class="bar"><button class="back" onclick="openRoutine('${r.id}')">&lsaquo; ${esc(r.name)}</button></div>
+  return `<div class="bar"><button class="back" onclick="${toActive?`go('train')`:`openRoutine('${r.id}')`}">
+      &lsaquo; ${esc(toActive?db.active.routineName:r.name)}</button></div>
     <h1>Add exercise</h1>
+    ${toActive?`<div class="muted" style="margin:-6px 0 14px">Adds it to this workout only. Your routine stays as it is.</div>`:''}
     <input id="exq" placeholder="Search your exercises" autocapitalize="off"
       value="${esc(ui.q)}" oninput="setQ(this.value)">
     <div style="height:14px"></div>
     ${groups.length?groups.map(([bp,items])=>`<p class="eyebrow">${esc(bp)}</p>`+
-      items.map(e=>{const used=r.exercises.some(x=>x.exerciseId===e.id);
-      return `<button class="card tap" onclick="pickExercise('${r.id}','${e.id}')"><div class="row">
+      items.map(e=>`<button class="card tap" onclick="pickExercise('${target}','${e.id}')"><div class="row">
         <div><div style="font-weight:600">${esc(e.name)}</div>
-        <div class="muted">${esc(e.equipment)}${used?' &middot; already added':''}</div></div>
-        <div class="chev">+</div></div></button>`;}).join('')).join('')
+        <div class="muted">${esc(e.equipment)}${used(e.id)?' &middot; already added':''}</div></div>
+        <div class="chev">+</div></div></button>`).join('')).join('')
       :`<div class="empty">Nothing in your list matches that.</div>`}
     <div class="lbl" style="margin-top:20px">Not in your list?</div>
     <input id="newexname" placeholder="New exercise name" autocapitalize="sentences"
-      onkeydown="if(event.key==='Enter')newExercise('${r.id}')">
+      onkeydown="if(event.key==='Enter')newExercise('${target}')">
     ${errAt('newex')}
     <div style="height:10px"></div>
-    <button class="btn ghost" onclick="newExercise('${r.id}')">Create and add</button>`;
+    <button class="btn ghost" onclick="newExercise('${target}')">Create and add</button>`;
 }
 function vExercises(){
   const groups=exGroups(ui.q);
@@ -619,7 +632,9 @@ function vActive(){
           </svg></button>
       </div>
       ${errAt('set'+i)}
-    </div>`;}).join('')}`;
+    </div>`;}).join('')}
+    <button class="btn ghost" onclick="openPicker('${ACTIVE_PICK}')">+ Add an exercise</button>
+    <div class="muted" style="margin-top:8px;font-size:13px">For this workout only &mdash; the routine is not changed. Anything you log nothing against is dropped when you finish.</div>`;
 }
 
 function openChart(exerciseId){ui.chartFor=exerciseId;render();}
@@ -685,8 +700,16 @@ function openPicker(rid){view={t:'picker',id:rid};ui.q='';ui.err=null;ui.pending
 function setQ(v){ui.q=v;render();
   const el=document.getElementById('exq');
   if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}}
-function pickExercise(rid,exid){const r=db.routines.find(x=>x.id===rid);
-  const cat=exById(exid);
+function pickExercise(rid,exid){const cat=exById(exid);
+  /* into the running workout: no touch(), db.active is never synced */
+  if(rid===ACTIVE_PICK){
+    if(!db.active){go('train');return;}
+    db.active.entries.push({exerciseId:exid,name:cat?cat.name:'',
+      sets:[],rest:120,restEndsAt:null});
+    save();view={t:'train'};ui.q='';render();
+    /* the new card is at the bottom, so go there rather than to the top */
+    window.scrollTo(0,document.body.scrollHeight);return;}
+  const r=db.routines.find(x=>x.id===rid);
   r.exercises.push({id:uid(),exerciseId:exid,name:cat?cat.name:'',sets:4});
   touch(r);save();view={t:'routine',id:rid};ui.q='';render();window.scrollTo(0,0);}
 function newExercise(rid){const el=document.getElementById('newexname');

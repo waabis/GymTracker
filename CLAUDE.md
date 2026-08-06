@@ -60,6 +60,9 @@ catalog nested inside Routines.
 - **Workout** — log weight + reps per set, running timer, "last time" shown
   under each exercise, delete a set, discard or finish. The first set of each
   exercise pre-fills from what you lifted last session, not a fixed 20 kg.
+  An exercise can be added mid-session from the catalog — same picker as the
+  routines, `view.id === '@active'` instead of a routine id — and it lands in
+  that workout only, never in the routine.
   The other two tabs stay usable during a workout; a banner on them leads
   back. A trend icon on any exercise with history opens a bottom-sheet modal
   (the app's only modal — everything else is a full page) with two hand-rolled
@@ -119,9 +122,11 @@ then fix what actually annoys. Nothing left on the roadmap to build ahead of.
 
 Known gaps, ranked by how likely they are to bite, for when Phase 4 says so:
 
-1. **No way to change a workout once started** — if a machine is taken you
-   cannot add or swap an exercise mid-session, so you log it under the wrong
-   exercise, which is exactly what the catalog exists to prevent.
+1. ~~No way to change a workout once started~~ — **done**: "+ Add an exercise"
+   at the bottom of a running workout opens the same picker the routines use,
+   and adds to that session only. Still cannot *swap* or reorder, and cannot
+   remove an added exercise — one with nothing logged against it is dropped
+   when you finish, so a mistap costs a card on screen, not bad data.
 2. **Backup can fail silently** — a failed sync shows only a small corner
    badge. No "last backed up" you can actually see.
 3. **Cannot fix a set after finishing** — only deleting the whole workout.
