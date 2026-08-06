@@ -598,7 +598,6 @@ function vActive(){
         </svg></button>`:''}
       </div>
       ${last?`<div class="muted" style="margin-bottom:6px">Last time: ${last.sets.map(s=>fmtW(s.w)+'kg×'+s.r).join(', ')}</div>`:''}
-      <div class="muted" style="margin-bottom:4px">${en.sets.length} set${en.sets.length===1?'':'s'} logged</div>
       ${en.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
         <div class="v">${fmtW(s.w)}<em>kg</em>${s.r}<em>reps</em></div>
         <button class="x" onclick="delSet(${i},${j})">&times;</button></div>`).join('')}
