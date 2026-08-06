@@ -126,7 +126,15 @@ const uid=()=>(crypto.randomUUID?crypto.randomUUID():
     const r=Math.random()*16|0;return(c==='x'?r:(r&0x3|0x8)).toString(16);}));
 let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:false};
 let view={t:'train'};
-let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false,chartFor:null};
+let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false,
+  chartFor:null,draft:{}};
+/* Weight/reps you have typed but not logged yet. render() rebuilds every card
+   from scratch, so without this any redraw — adjusting rest, deleting a set,
+   logging a set on another exercise, opening a chart — silently threw your
+   typed numbers away and put the defaults back. */
+function setDraft(k,v){ui.draft[k]=v;}
+const draftOr=(k,fallback)=>ui.draft[k]!=null?ui.draft[k]:fallback;
+function clearDraft(i){delete ui.draft['w'+i];delete ui.draft['r'+i];}
 let tick=null;
 
 /* ---------- exercise catalog ---------- */
@@ -173,7 +181,10 @@ const seedId=name=>'seed:'+norm(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/
 function findOrCreateEx(name){
   const n=norm(name);
   const hit=db.exercises.find(e=>norm(e.name)===n);
-  if(hit)return hit;
+  /* A deleted exercise is only hidden, never gone — its id still owns all the
+     history. Adding the name back has to revive that row, or the tap does
+     nothing at all and the name can never be used again. */
+  if(hit){if(hit.deleted){hit.deleted=false;touch(hit);}return hit;}
   const e={id:uid(),name:String(name).trim(),bodyPart:'Other',equipment:'Other',deleted:false};
   touch(e);db.exercises.push(e);return e;
 }
@@ -217,11 +228,19 @@ function load(){
      on every load and pile up as duplicates once synced */
   save(false);
 }
+/* A routine can list the same exercise twice (bench at the start and again at
+   the end). Every read has to gather all of its slots, or it silently reports
+   just the first one — the trend chart was showing 400 kg for a 670 kg session. */
+function setsIn(w,exerciseId,fallbackName){
+  const match=x=>x.exerciseId?x.exerciseId===exerciseId
+    :(!!fallbackName&&norm(x.name)===norm(fallbackName));
+  return w.entries.filter(match).reduce((all,e)=>all.concat(e.sets),[]);
+}
 function lastEntryFor(exerciseId,fallbackName){
   const past=activeWorkouts().sort((a,b)=>b.startedAt-a.startedAt);
   for(const w of past){
-    const e=w.entries.find(x=>x.exerciseId?x.exerciseId===exerciseId:norm(x.name)===norm(fallbackName));
-    if(e&&e.sets.length)return e;
+    const sets=setsIn(w,exerciseId,fallbackName);
+    if(sets.length)return{sets};
   }
   return null;
 }
@@ -251,18 +270,12 @@ const restStyle=en=>restState(en)==='idle'?'':'font-weight:700;color:var(--text)
    (w*(1+r/30)) of the best set that session. Both are per-workout points. */
 function exerciseSeries(exerciseId){
   const rows=[];
-  activeWorkouts().forEach(w=>{
-    const en=w.entries.find(e=>e.exerciseId===exerciseId);
-    if(en&&en.sets.length)rows.push({date:w.startedAt,
-      vol:en.sets.reduce((s,x)=>s+x.w*x.r,0),
-      e1rm:Math.max(...en.sets.map(x=>x.w*(1+x.r/30)))});
-  });
-  if(db.active){
-    const en=db.active.entries.find(e=>e.exerciseId===exerciseId);
-    if(en&&en.sets.length)rows.push({date:db.active.startedAt,
-      vol:en.sets.reduce((s,x)=>s+x.w*x.r,0),
-      e1rm:Math.max(...en.sets.map(x=>x.w*(1+x.r/30)))});
-  }
+  const point=(w)=>{const sets=setsIn(w,exerciseId,null);
+    if(sets.length)rows.push({date:w.startedAt,
+      vol:sets.reduce((s,x)=>s+x.w*x.r,0),
+      e1rm:Math.max(...sets.map(x=>x.w*(1+x.r/30)))});};
+  activeWorkouts().forEach(point);
+  if(db.active)point(db.active);
   return rows.sort((a,b)=>a.date-b.date);
 }
 function sparkline(points){
@@ -324,23 +337,29 @@ function render(){
   if(ui.updateReady)html+=`<div class="warn" style="cursor:pointer;border-left-color:var(--tab-history)"
     onclick="applyUpdate()">New version ready &mdash; tap to update</div>`;
   if(!session)html+=vAuthBanner();
-  if(db.active)html+=vActive();
-  else if(view.t==='train')html+=vTrain();
-  else if(view.t==='routines')html+=vRoutines();
-  else if(view.t==='routine')html+=vRoutine();
-  else if(view.t==='picker')html+=vPicker();
-  else if(view.t==='exercises')html+=vExercises();
-  else if(view.t==='exercise')html+=vExercise();
-  else if(view.t==='history')html+=vHistory();
+  /* A workout in progress owns the Workout tab, but the other tabs still work —
+     the tab bar used to light up the tab you tapped while leaving the workout
+     on screen, which just looked broken. */
+  if(db.active&&view.t==='train')html+=vActive();
+  else{
+    if(db.active)html+=vResume();
+    if(view.t==='train')html+=vTrain();
+    else if(view.t==='routines')html+=vRoutines();
+    else if(view.t==='routine')html+=vRoutine();
+    else if(view.t==='picker')html+=vPicker();
+    else if(view.t==='exercises')html+=vExercises();
+    else if(view.t==='exercise')html+=vExercise();
+    else if(view.t==='history')html+=vHistory();
+  }
   html+=vChartModal();
   m.innerHTML=html;
-  const sect=db.active?'train':(ROUTINE_VIEWS.includes(view.t)?'routines':view.t);
+  const sect=ROUTINE_VIEWS.includes(view.t)?'routines':view.t;
   m.style.setProperty('--section',{train:'var(--accent-fg)',
     routines:'var(--tab-routines)',history:'var(--tab-history)'}[sect]||'var(--muted)');
   document.getElementById('tabs').innerHTML=[['train','Workout'],['routines','Routines'],['history','History']]
-    .map(([t,label])=>`<button class="tab-${t} ${t===sect&&!db.active||view.t===t?'on':''}" onclick="go('${t}')">${label}</button>`).join('');
+    .map(([t,label])=>`<button class="tab-${t} ${t===sect?'on':''}" onclick="go('${t}')">${label}</button>`).join('');
   clearInterval(tick);
-  if(db.active){tick=setInterval(()=>{const e=document.getElementById('timer');
+  if(db.active&&view.t==='train'){tick=setInterval(()=>{const e=document.getElementById('timer');
     if(e)e.textContent=dur(db.active.startedAt,Date.now());
     db.active.entries.forEach((en,i)=>{const re=document.getElementById('rest-'+i);
       if(!re)return;re.textContent=restLabel(en);re.style.cssText='font-size:14px;'+restStyle(en);});
@@ -348,6 +367,9 @@ function render(){
   renderSyncBadge();
 }
 function go(t){view={t};ui.pending=null;ui.err=null;ui.ekey=null;ui.q='';render();window.scrollTo(0,0);}
+const vResume=()=>`<div class="warn" style="cursor:pointer;border-left-color:var(--accent)"
+  onclick="go('train')"><b style="color:var(--text)">${esc(db.active.routineName)}</b>
+  still in progress &mdash; tap to go back</div>`;
 
 function vTrain(){
   const routines=activeRoutines();
@@ -384,8 +406,13 @@ function vRoutines(){
        <div class="chev">&rsaquo;</div></div></button>`;
 }
 
+/* Falling back has to return the replacement screen, not call go(). go() renders
+   and then this returns '' into the render that is still running, which
+   overwrites the page with nothing — a blank screen you can only leave via the
+   tab bar. Reachable when a sync deletes whatever you were looking at. */
 function vRoutine(){
-  const r=activeRoutines().find(x=>x.id===view.id); if(!r){go('routines');return'';}
+  const r=activeRoutines().find(x=>x.id===view.id);
+  if(!r){view={t:'routines'};ui.pending=null;return vRoutines();}
   return `<div class="bar"><button class="back" onclick="go('routines')">&lsaquo; Routines</button>
       ${ui.pending==='delr'
         ? `<span><button class="back" onclick="cancel()">Cancel</button>
@@ -423,7 +450,8 @@ function exGroups(q){
     .map(bp=>[bp,byBp[bp].sort((a,b)=>a.name.localeCompare(b.name))]);
 }
 function vPicker(){
-  const r=activeRoutines().find(x=>x.id===view.id); if(!r){go('routines');return'';}
+  const r=activeRoutines().find(x=>x.id===view.id);
+  if(!r){view={t:'routines'};ui.pending=null;return vRoutines();}
   const groups=exGroups(ui.q);
   return `<div class="bar"><button class="back" onclick="openRoutine('${r.id}')">&lsaquo; ${esc(r.name)}</button></div>
     <h1>Add exercise</h1>
@@ -465,7 +493,8 @@ function vExercises(){
     <button class="btn ghost" onclick="newExercise('')">Add to list</button>`;
 }
 function vExercise(){
-  const e=exById(view.id); if(!e||e.deleted){go('exercises');return'';}
+  const e=exById(view.id);
+  if(!e||e.deleted){view={t:'exercises'};ui.pending=null;return vExercises();}
   const chips=(field,opts)=>`<div class="chips">`+opts.map(o=>
     `<button class="chip${e[field]===o?' on':''}" onclick="setExerciseTag('${e.id}','${field}','${o}')">${o}</button>`
     ).join('')+`</div>`;
@@ -539,11 +568,13 @@ function vActive(){
       <div class="pair">
         <div><div class="lbl">Weight (kg)</div><div class="step">
           <button onclick="bump(${i},'w',-2.5)">&minus;</button>
-          <input id="w${i}" inputmode="decimal" value="${nextW(en)}" onfocus="this.select()">
+          <input id="w${i}" inputmode="decimal" value="${esc(draftOr('w'+i,nextW(en)))}"
+            oninput="setDraft('w${i}',this.value)" onfocus="this.select()">
           <button onclick="bump(${i},'w',2.5)">+</button></div></div>
         <div><div class="lbl">Reps</div><div class="step">
           <button onclick="bump(${i},'r',-1)">&minus;</button>
-          <input id="r${i}" inputmode="numeric" value="${nextR(en)}" onfocus="this.select()">
+          <input id="r${i}" inputmode="numeric" value="${esc(draftOr('r'+i,nextR(en)))}"
+            oninput="setDraft('r${i}',this.value)" onfocus="this.select()">
           <button onclick="bump(${i},'r',1)">+</button></div></div>
       </div>
       ${errAt('set'+i)}
@@ -643,32 +674,45 @@ function start(rid){const r=db.routines.find(x=>x.id===rid);
   if(!r.exercises.length){fail('start','Add at least one exercise to this routine first.');return;}
   db.active={id:uid(),routineId:r.id,routineName:r.name,startedAt:Date.now(),
     entries:r.exercises.map(e=>({exerciseId:e.exerciseId,name:exName(e.exerciseId,e.name),
-      sets:[],rest:120,restEndsAt:null}))};save();ui.err=null;render();window.scrollTo(0,0);}
+      sets:[],rest:120,restEndsAt:null}))};save();
+  ui.err=null;ui.draft={};view={t:'train'};render();window.scrollTo(0,0);}
 function adjustRest(i,d){const en=db.active.entries[i];
   en.rest=Math.max(30,(en.rest||120)+d);
   if(en.restEndsAt&&en.restEndsAt>Date.now())en.restEndsAt+=d*1000;
   save(false);render();}
 
-const nextW=en=>en.sets.length?fmtW(en.sets[en.sets.length-1].w):'20';
-const nextR=en=>en.sets.length?en.sets[en.sets.length-1].r:'8';
+/* Within a session the next set starts from the one before it. For the first
+   set, start from what you actually lifted last time — starting at 20 kg meant
+   16 taps of "+" to get back to a 60 kg working weight, every single exercise. */
+function nextW(en){if(en.sets.length)return fmtW(en.sets[en.sets.length-1].w);
+  const last=lastEntryFor(en.exerciseId,en.name);
+  return last&&last.sets.length?fmtW(last.sets[0].w):'20';}
+function nextR(en){if(en.sets.length)return en.sets[en.sets.length-1].r;
+  const last=lastEntryFor(en.exerciseId,en.name);
+  return last&&last.sets.length?last.sets[0].r:'8';}
 function bump(i,f,d){const el=document.getElementById(f+i);
-  let v=parseFloat(el.value)||0;v=Math.max(0,Math.round((v+d)*100)/100);el.value=fmtW(v);}
+  let v=parseFloat(el.value)||0;v=Math.max(0,Math.round((v+d)*100)/100);
+  el.value=fmtW(v);setDraft(f+i,el.value);}
 function addSet(i){const w=parseFloat(document.getElementById('w'+i).value);
   const r=parseInt(document.getElementById('r'+i).value,10);
-  if(isNaN(w)||isNaN(r)||r<1){fail('set'+i,'Enter a weight and at least 1 rep.');return;}
+  if(isNaN(w)||w<0||isNaN(r)||r<1){fail('set'+i,'Enter a weight and at least 1 rep.');return;}
   const en=db.active.entries[i];
   en.sets.push({w,r});
   en.restEndsAt=Date.now()+(en.rest||120)*1000;
-  save();ui.err=null;render();}
-function delSet(i,j){db.active.entries[i].sets.splice(j,1);save();render();}
+  clearDraft(i);save();ui.err=null;render();}
+function delSet(i,j){const en=db.active.entries[i];en.sets.splice(j,1);
+  /* no sets left means nothing to rest from */
+  if(!en.sets.length)en.restEndsAt=null;
+  save();render();}
 
 function finish(){const a=db.active;const done=a.entries.filter(e=>e.sets.length);
   if(!done.length){ui.pending=null;fail('fin','Log at least one set before finishing.');return;}
   const w={id:a.id,routineId:a.routineId,routineName:a.routineName,
     startedAt:a.startedAt,endedAt:Date.now(),entries:done,deleted:false};
   touch(w);db.workouts.push(w);
-  db.active=null;save();ui.pending=null;ui.err=null;view={t:'history',open:a.id};render();window.scrollTo(0,0);}
-function cancelWorkout(){db.active=null;save(false);go('train');}
+  db.active=null;save();ui.pending=null;ui.err=null;ui.draft={};
+  view={t:'history',open:a.id};render();window.scrollTo(0,0);}
+function cancelWorkout(){db.active=null;ui.draft={};save(false);go('train');}
 function toggle(id){view={t:'history',open:view.open===id?null:id};ui.pending=null;render();}
 function delWorkout(id){const w=db.workouts.find(x=>x.id===id);
   if(w){w.deleted=true;touch(w);}save();view={t:'history'};ui.pending=null;render();}

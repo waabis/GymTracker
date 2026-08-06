@@ -53,13 +53,16 @@ catalog nested inside Routines.
 - **Routines** — named list of exercises picked from the catalog, each with a
   target set count (default 4).
 - **Workout** — log weight + reps per set, running timer, "last time" shown
-  under each exercise, delete a set, discard or finish. A trend icon on any
-  exercise with history opens a bottom-sheet modal (the app's only modal —
-  everything else is a full page) with two hand-rolled SVG charts: total
-  volume and Epley-estimated 1RM per workout, live-updating as you log. A rest
-  timer per exercise (default 120s, ±30s independently per exercise) starts
-  automatically when a set is logged and shows "Rest done" once it elapses —
-  visual only, no sound, since the app never uses alert/confirm/prompt.
+  under each exercise, delete a set, discard or finish. The first set of each
+  exercise pre-fills from what you lifted last session, not a fixed 20 kg.
+  The other two tabs stay usable during a workout; a banner on them leads
+  back. A trend icon on any exercise with history opens a bottom-sheet modal
+  (the app's only modal — everything else is a full page) with two hand-rolled
+  SVG charts: total volume and Epley-estimated 1RM per workout, live-updating
+  as you log. A rest timer per exercise (default 120s, ±30s independently per
+  exercise) starts automatically when a set is logged and shows "Rest done"
+  once it elapses — visual only, no sound, since the app never uses
+  alert/confirm/prompt.
 - **History** — past workouts, expandable detail, total kg lifted, delete.
 - **Backup** — Supabase, optional and never blocking. Logged out, everything
   still works and a quiet banner offers login.

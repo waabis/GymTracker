@@ -7,7 +7,7 @@
  * All paths are relative on purpose: the app lives at /GymTracker/ on GitHub
  * Pages but at / when served locally, and relative paths work in both.
  */
-const CACHE='rack-v9';
+const CACHE='rack-v11';
 
 /* Must cache for the app to open at all. */
 const CORE=['./','./index.html','./manifest.json'];
@@ -27,7 +27,16 @@ const keep=r=>r&&(r.ok||r.type==='opaque');
 self.addEventListener('install',e=>{
   e.waitUntil((async()=>{
     const c=await caches.open(CACHE);
-    await c.addAll(CORE);
+    /* cache:'reload', not a plain addAll: addAll goes through the browser's
+       normal HTTP cache, so within GitHub Pages' 10-minute max-age a new
+       service worker happily installs the OLD index.html under the NEW cache
+       name. The update banner then "succeeds" and leaves you on the old app,
+       with no second prompt because the cache name already matches. */
+    await Promise.all(CORE.map(async u=>{
+      const r=await fetch(u,{cache:'reload'});
+      if(!r.ok)throw new Error('core fetch failed: '+u);
+      await c.put(u,r);
+    }));
     /* allSettled, not addAll: one unreachable CDN must not fail the install
        and leave the app with no offline copy at all. */
     await Promise.allSettled(EXTRAS.map(u=>c.add(u)));
