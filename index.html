@@ -163,7 +163,7 @@ const uid=()=>(crypto.randomUUID?crypto.randomUUID():
 let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:false};
 let view={t:'train'};
 let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false,
-  chartFor:null,draft:{},newEx:{name:'',bodyPart:'',equipment:''}};
+  chartFor:null,draft:{},newEx:{name:'',bodyPart:'',equipment:''},newRoutineName:''};
 /* Weight/reps you have typed but not logged yet. render() rebuilds every card
    from scratch, so without this any redraw — adjusting rest, deleting a set,
    logging a set on another exercise, opening a chart — silently threw your
@@ -202,7 +202,7 @@ const exById=id=>db.exercises.find(x=>x.id===id);
 const exName=(exerciseId,fallback)=>{const e=exById(exerciseId);
   return e?e.name:(fallback||'Unknown exercise');};
 const activeExercises=()=>db.exercises.filter(e=>!e.deleted);
-const ROUTINE_VIEWS=['routines','routine','picker','exercises','exercise','newexercise'];
+const ROUTINE_VIEWS=['routines','routine','picker','exercises','exercise','newexercise','newroutine'];
 /* deterministic per-routine colour: same routine always gets the same
    colour, chosen from a fixed palette so it's always vivid and readable,
    picked to stay clear of the app's own semantic colours (amber accent,
@@ -391,6 +391,7 @@ function render(){
     else if(view.t==='picker')html+=vPicker();
     else if(view.t==='exercises')html+=vExercises();
     else if(view.t==='newexercise')html+=vNewExercise();
+    else if(view.t==='newroutine')html+=vNewRoutine();
     else if(view.t==='exercise')html+=vExercise();
     else if(view.t==='history')html+=vHistory();
   }
@@ -437,17 +438,28 @@ function vRoutines(){
       <div class="muted">${r.exercises.map(e=>esc(exName(e.exerciseId,e.name))).join(' \u00b7 ')||'No exercises'}</div></div>
       <div class="chev">&rsaquo;</div></div></button>`;}).join('')
      :`<div class="empty">A routine is just a named list of exercises.<br>Push day, Legs, whatever you call it.</div>`)+
-    `<div class="lbl" style="margin-top:20px">New routine</div>
-     <input id="rname" placeholder="e.g. Push day" autocapitalize="sentences"
-       onkeydown="if(event.key==='Enter')newRoutine()">
-     ${errAt('rname')}
-     <div style="height:10px"></div>
-     <button class="btn" onclick="newRoutine()">Create routine</button>
+    `<div style="height:20px"></div>
+     <button class="btn" onclick="openNewRoutine()">+ New routine</button>
      <div style="height:26px"></div>
      <button class="card tap" style="margin:0" onclick="go('exercises')"><div class="row">
        <div><div style="font-weight:600">Manage exercises</div>
        <div class="muted">${activeExercises().length} in your list</div></div>
        <div class="chev">&rsaquo;</div></div></button>`;
+}
+
+/* Naming a routine is its own screen for the same reason as a new exercise:
+   the list stays a list, and creating is one deliberate button. */
+function vNewRoutine(){
+  return `<div class="bar"><button class="back" onclick="go('routines')">&lsaquo; Routines</button></div>
+    <h1>New routine</h1>
+    <div class="lbl">Name</div>
+    <input id="rname" placeholder="e.g. Push day" autocapitalize="sentences"
+      value="${esc(ui.newRoutineName)}" oninput="setNewRoutineName(this.value)"
+      onkeydown="if(event.key==='Enter')newRoutine()">
+    ${errAt('rname')}
+    <div class="muted" style="margin-top:10px;font-size:13px">You pick its exercises next.</div>
+    <div style="height:24px"></div>
+    <button class="btn" onclick="newRoutine()">Save</button>`;
 }
 
 /* Falling back has to return the replacement screen, not call go(). go() renders
@@ -700,10 +712,17 @@ function vHistory(){
 }
 
 /* ---------- actions ---------- */
-function newRoutine(){const el=document.getElementById('rname');const n=(el?el.value:'').trim();
+function openNewRoutine(){ui.newRoutineName='';ui.err=null;ui.ekey=null;
+  view={t:'newroutine'};render();window.scrollTo(0,0);}
+function setNewRoutineName(v){ui.newRoutineName=v;}
+function newRoutine(){const el=document.getElementById('rname');
+  const n=((el?el.value:ui.newRoutineName)||'').trim();
+  ui.newRoutineName=n;
   if(!n){fail('rname','Give the routine a name first.');return;}
   const r={id:uid(),name:n,exercises:[],deleted:false};touch(r);db.routines.push(r);save();
-  ui.err=null;view={t:'routine',id:r.id};render();window.scrollTo(0,0);}
+  /* straight into the new routine — an empty one is useless until it has
+     exercises, and that screen is where you add them */
+  ui.err=null;ui.newRoutineName='';view={t:'routine',id:r.id};render();window.scrollTo(0,0);}
 function openRoutine(id){view={t:'routine',id};ui.pending=null;render();window.scrollTo(0,0);}
 function delRoutine(id){const r=db.routines.find(x=>x.id===id);
   if(r){r.deleted=true;touch(r);}save();go('routines');}
