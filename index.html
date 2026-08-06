@@ -127,7 +127,8 @@ nav button.tab-history.on{color:var(--tab-history);background:rgba(21,128,61,.14
 
 .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
 .back{font-size:15px;color:var(--muted);font-weight:500}
-.timer{font-size:14px;font-weight:600;color:var(--accent-fg);letter-spacing:.04em}
+.timer{font-size:15px;font-weight:600;color:var(--accent-fg);letter-spacing:.04em;
+  font-variant-numeric:tabular-nums}
 .fin{background:var(--accent);color:var(--ink);font-weight:600;padding:9px 16px;border-radius:var(--r-sm);
   font-size:15px;box-shadow:var(--shadow-accent)}
 .danger{color:var(--danger);font-weight:500;font-size:15px}
@@ -290,7 +291,10 @@ const activeWorkouts=()=>db.workouts.filter(w=>!w.deleted);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmtW=w=>(Math.round(w*100)/100).toString();
 function fmtDate(ms){const d=new Date(ms);return d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});}
-function dur(a,b){const m=Math.max(0,Math.round((b-a)/60000));return m<60?m+' min':Math.floor(m/60)+'h '+(m%60)+'m';}
+/* elapsed workout time as hh:mm:ss — the only place it is used is the header
+   of a running workout, which reticks every second */
+function dur(a,b){const s=Math.max(0,Math.floor((b-a)/1000)),p=n=>String(n).padStart(2,'0');
+  return `${p(Math.floor(s/3600))}:${p(Math.floor(s/60)%60)}:${p(s%60)}`;}
 function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 const restState=en=>!en.restEndsAt?'idle':(en.restEndsAt-Date.now()>0?'on':'done');
 /* the clock is its own element so the 1s tick can rewrite just the digits */
