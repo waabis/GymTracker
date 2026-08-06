@@ -163,7 +163,7 @@ const uid=()=>(crypto.randomUUID?crypto.randomUUID():
 let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:false};
 let view={t:'train'};
 let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false,
-  chartFor:null,draft:{}};
+  chartFor:null,draft:{},newEx:{name:'',bodyPart:'',equipment:''}};
 /* Weight/reps you have typed but not logged yet. render() rebuilds every card
    from scratch, so without this any redraw — adjusting rest, deleting a set,
    logging a set on another exercise, opening a chart — silently threw your
@@ -202,7 +202,7 @@ const exById=id=>db.exercises.find(x=>x.id===id);
 const exName=(exerciseId,fallback)=>{const e=exById(exerciseId);
   return e?e.name:(fallback||'Unknown exercise');};
 const activeExercises=()=>db.exercises.filter(e=>!e.deleted);
-const ROUTINE_VIEWS=['routines','routine','picker','exercises','exercise'];
+const ROUTINE_VIEWS=['routines','routine','picker','exercises','exercise','newexercise'];
 /* deterministic per-routine colour: same routine always gets the same
    colour, chosen from a fixed palette so it's always vivid and readable,
    picked to stay clear of the app's own semantic colours (amber accent,
@@ -390,6 +390,7 @@ function render(){
     else if(view.t==='routine')html+=vRoutine();
     else if(view.t==='picker')html+=vPicker();
     else if(view.t==='exercises')html+=vExercises();
+    else if(view.t==='newexercise')html+=vNewExercise();
     else if(view.t==='exercise')html+=vExercise();
     else if(view.t==='history')html+=vHistory();
   }
@@ -539,12 +540,30 @@ function vExercises(){
         <div class="muted">${esc(e.equipment)}</div></div>
         <div class="chev">&rsaquo;</div></div></button>`).join('')).join('')
       :`<div class="empty">Nothing matches that.</div>`}
-    <div class="lbl" style="margin-top:20px">Add a new exercise</div>
+    <div style="height:20px"></div>
+    <button class="btn ghost" onclick="openNewExercise()">+ New exercise</button>`;
+}
+/* Its own screen rather than a name box at the foot of the list: body part and
+   equipment get set while you are thinking about the exercise, instead of the
+   list filling up with things tagged Other that nobody goes back to fix. */
+function vNewExercise(){
+  const n=ui.newEx;
+  const chips=(field,opts)=>`<div class="chips">`+opts.map(o=>
+    `<button class="chip${n[field]===o?' on':''}" onclick="setNewExField('${field}','${o}')">${o}</button>`
+    ).join('')+`</div>`;
+  return `<div class="bar"><button class="back" onclick="go('exercises')">&lsaquo; Exercises</button></div>
+    <h1>New exercise</h1>
+    <div class="lbl">Name</div>
     <input id="newexname" placeholder="e.g. Overhead press" autocapitalize="sentences"
-      onkeydown="if(event.key==='Enter')newExercise('')">
+      value="${esc(n.name)}" oninput="setNewExName(this.value)"
+      onkeydown="if(event.key==='Enter')saveNewExercise()">
     ${errAt('newex')}
-    <div style="height:10px"></div>
-    <button class="btn ghost" onclick="newExercise('')">Add to list</button>`;
+    <div class="lbl" style="margin-top:22px">Body part</div>
+    ${chips('bodyPart',BODY_PARTS)}
+    <div class="lbl" style="margin-top:18px">Equipment</div>
+    ${chips('equipment',EQUIPMENT)}
+    <div style="height:24px"></div>
+    <button class="btn" onclick="saveNewExercise()">Save</button>`;
 }
 function vExercise(){
   const e=exById(view.id);
@@ -712,14 +731,30 @@ function pickExercise(rid,exid){const cat=exById(exid);
   const r=db.routines.find(x=>x.id===rid);
   r.exercises.push({id:uid(),exerciseId:exid,name:cat?cat.name:'',sets:4});
   touch(r);save();view={t:'routine',id:rid};ui.q='';render();window.scrollTo(0,0);}
+/* the picker's inline create: straight into the routine or workout you are
+   filling. The catalog's own "+ New exercise" is a screen, see vNewExercise */
 function newExercise(rid){const el=document.getElementById('newexname');
   const n=(el?el.value:'').trim();
   if(!n){fail('newex','Type an exercise name first.');return;}
   if(activeExercises().some(e=>norm(e.name)===norm(n))){
     fail('newex','That exercise is already in your list.');return;}
-  const e=findOrCreateEx(n);save();ui.err=null;
-  if(rid)pickExercise(rid,e.id);
-  else{view={t:'exercises'};ui.q='';render();window.scrollTo(0,0);}}
+  const e=findOrCreateEx(n);save();ui.err=null;pickExercise(rid,e.id);}
+function openNewExercise(){ui.newEx={name:'',bodyPart:'',equipment:''};
+  ui.err=null;ui.ekey=null;view={t:'newexercise'};render();window.scrollTo(0,0);}
+function setNewExName(v){ui.newEx.name=v;}
+function setNewExField(f,v){ui.newEx[f]=v;render();}
+function saveNewExercise(){const el=document.getElementById('newexname');
+  const n=((el?el.value:ui.newEx.name)||'').trim();
+  ui.newEx.name=n;
+  if(!n){fail('newex','Give it a name.');return;}
+  if(activeExercises().some(e=>norm(e.name)===norm(n))){
+    fail('newex','That exercise is already in your list.');return;}
+  const e=findOrCreateEx(n);
+  e.bodyPart=ui.newEx.bodyPart||'Other';
+  e.equipment=ui.newEx.equipment||'Other';
+  touch(e);save();ui.err=null;
+  ui.newEx={name:'',bodyPart:'',equipment:''};
+  view={t:'exercises'};ui.q='';render();window.scrollTo(0,0);}
 function openExercise(id){view={t:'exercise',id};ui.pending=null;ui.err=null;
   render();window.scrollTo(0,0);}
 function renameExercise(id){const el=document.getElementById('exrename');
