@@ -127,9 +127,13 @@ button.card:active{transform:scale(.985);box-shadow:none}
 nav{position:fixed;bottom:0;left:0;right:0;background:rgba(255,255,255,.85);
   backdrop-filter:blur(16px);border-top:1px solid var(--line);
   box-shadow:0 -4px 16px rgba(23,26,28,.05);
-  padding-bottom:env(safe-area-inset-bottom);z-index:20}
-nav div{max-width:520px;margin:6px auto;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 8px}
-nav button{padding:12px 0 14px;font-size:12px;font-weight:700;letter-spacing:.1em;
+  /* The full 34px home-indicator inset plus the tabs' own padding left a
+     dead white band under the labels. The indicator only needs the bottom
+     ~20px kept clear of tap targets, so give back 14px of it — and floor at
+     6px for devices with no indicator, where the inset is 0. */
+  padding-bottom:max(calc(env(safe-area-inset-bottom) - 14px),6px);z-index:20}
+nav div{max-width:520px;margin:4px auto 0;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 8px}
+nav button{padding:11px 0;font-size:12px;font-weight:700;letter-spacing:.1em;
   text-transform:uppercase;color:var(--muted);border-radius:12px;
   transition:background-color .15s ease,color .15s ease}
 nav button.tab-train.on{color:var(--accent-fg);background:rgba(245,169,0,.18)}
