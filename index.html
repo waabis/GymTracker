@@ -433,10 +433,13 @@ function vTrain(){
     <div class="empty">No routines yet.<br>Build one first, then start a workout.</div>
     <button class="btn" onclick="go('routines')">Create a routine</button>`;
   return `<h1>Workout</h1><p class="eyebrow">Pick a routine</p>`+
-    routines.map(r=>`<button class="card tap" onclick="start('${r.id}')">
-      <div class="row"><div><div style="font-weight:600">${esc(r.name)}</div>
+    /* same stripe and name colour as the Routines tab — one routine, one
+       colour, wherever you meet it. Start stays amber: it is the action. */
+    routines.map(r=>{const c=routineColor(r.id);
+      return `<button class="card tap" style="border-left:4px solid ${c}" onclick="start('${r.id}')">
+      <div class="row"><div><div style="font-weight:700;color:${c}">${esc(r.name)}</div>
       <div class="muted">${r.exercises.length} exercise${r.exercises.length===1?'':'s'}</div></div>
-      <div style="color:var(--accent-fg);font-weight:600;font-size:15px">Start</div></div></button>`).join('')
+      <div style="color:var(--accent-fg);font-weight:600;font-size:15px">Start</div></div></button>`;}).join('')
     +errAt('start');
 }
 
