@@ -315,6 +315,11 @@ function fmtDate(ms){const d=new Date(ms);return d.toLocaleDateString('en-GB',{w
    of a running workout, which reticks every second */
 function dur(a,b){const s=Math.max(0,Math.floor((b-a)/1000)),p=n=>String(n).padStart(2,'0');
   return `${p(Math.floor(s/3600))}:${p(Math.floor(s/60)%60)}:${p(s%60)}`;}
+/* how long a finished workout took, in the coarse units you'd say out loud:
+   "48m", "1h 12m". Missing endedAt (shouldn't happen) just prints nothing. */
+function fmtLen(a,b){if(!a||!b||b<=a)return '';
+  const m=Math.max(1,Math.round((b-a)/60000));
+  return m<60?`${m}m`:(m%60?`${Math.floor(m/60)}h ${m%60}m`:`${Math.floor(m/60)}h`);}
 function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 
 /* ---------- plate calculator ---------- */
@@ -752,10 +757,11 @@ function vHistory(){
   return `<h1>History</h1>`+w.map(x=>{
     const sets=x.entries.reduce((n,e)=>n+e.sets.length,0);
     const vol=x.entries.reduce((n,e)=>n+e.sets.reduce((m,s)=>m+s.w*s.r,0),0);
+    const len=fmtLen(x.startedAt,x.endedAt);
     const open=view.open===x.id;
     return `<div class="card"><button class="tap" onclick="toggle('${x.id}')"><div class="row">
       <div><div style="font-weight:600">${esc(x.routineName)}</div>
-      <div class="muted">${fmtDate(x.startedAt)} \u00b7 ${sets} sets \u00b7 ${Math.round(vol)} kg lifted</div></div>
+      <div class="muted">${fmtDate(x.startedAt)}${len?' \u00b7 '+len:''} \u00b7 ${sets} sets \u00b7 ${Math.round(vol)} kg lifted</div></div>
       <div class="chev">${open?'&#8964;':'&rsaquo;'}</div></div></button>
       ${open?x.entries.map(e=>`<div style="margin-top:12px"><div class="lbl">${esc(exName(e.exerciseId,e.name))}</div>
         ${e.sets.map((s,j)=>`<div class="set"><div class="n">${j+1}</div>
