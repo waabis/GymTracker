@@ -109,7 +109,15 @@ a full page; the trend chart is the app's only modal.
 **History tab**
 
 - Past workouts, newest first, expandable to the individual sets. Total kg
-  lifted per workout. Delete a workout.
+  lifted per workout, and how long it took. Delete a workout.
+- **"Copy last 7 days"** copies the week as plain text, to paste into a chat
+  and ask for feedback. Not CSV or JSON on purpose: `60x8` says in four
+  characters what `{"w":60,"r":8}` spends fourteen on, it reads the same to
+  you as to whatever you paste it into, and a week is ~500 bytes.
+  Clipboard, not a file download — `<a download>` is unreliable in an iOS
+  standalone home-screen app. Falls back to the old textarea/execCommand
+  trick if `clipboard.writeText` is refused, and reports either outcome in
+  the button itself (never a pop-up).
 
 **Backup and offline**
 
@@ -191,7 +199,10 @@ Known gaps, ranked by how likely they are to bite:
 4. Cannot rename a routine or reorder its exercises. (Deleting one, from the
    list or from its own screen, does work.)
 
-Later, only if wanted: export, cardio. (Plate calculator — done 6 Aug 2026.)
+Later, only if wanted: cardio. (Plate calculator — done 6 Aug 2026. Workout
+length in History and a plain-text weekly export — done 24 Aug 2026; export
+covers the last 7 days only, and there is no share-sheet/file path yet
+because copy-and-paste was the whole point.)
 
 ### Phase 5 design, already decided
 

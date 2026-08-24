@@ -179,7 +179,8 @@ const uid=()=>(crypto.randomUUID?crypto.randomUUID():
 let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:false};
 let view={t:'train'};
 let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false,
-  chartFor:null,draft:{},newEx:{name:'',bodyPart:'',equipment:''},newRoutineName:''};
+  chartFor:null,draft:{},newEx:{name:'',bodyPart:'',equipment:''},newRoutineName:'',
+  copied:null};
 /* Weight/reps you have typed but not logged yet. render() rebuilds every card
    from scratch, so without this any redraw — adjusting rest, deleting a set,
    logging a set on another exercise, opening a chart — silently threw your
@@ -320,6 +321,14 @@ function dur(a,b){const s=Math.max(0,Math.floor((b-a)/1000)),p=n=>String(n).padS
 function fmtLen(a,b){if(!a||!b||b<=a)return '';
   const m=Math.max(1,Math.round((b-a)/60000));
   return m<60?`${m}m`:(m%60?`${Math.floor(m/60)}h ${m%60}m`:`${Math.floor(m/60)}h`);}
+/* "18-24 Aug 2026", collapsing whatever the two ends share. Only the export
+   header uses it. */
+function fmtRange(a,b){const A=new Date(a),B=new Date(b),
+  mo=d=>d.toLocaleDateString('en-GB',{month:'short'});
+  if(A.getFullYear()!==B.getFullYear())
+    return `${A.getDate()} ${mo(A)} ${A.getFullYear()} \u2013 ${B.getDate()} ${mo(B)} ${B.getFullYear()}`;
+  if(mo(A)!==mo(B))return `${A.getDate()} ${mo(A)} \u2013 ${B.getDate()} ${mo(B)} ${B.getFullYear()}`;
+  return `${A.getDate()}\u2013${B.getDate()} ${mo(B)} ${B.getFullYear()}`;}
 function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0');}
 
 /* ---------- plate calculator ---------- */
@@ -751,10 +760,55 @@ function vChartModal(){
   </div>`;
 }
 
+/* ---------- export ---------- */
+/* The last 7 days as plain text, sized to paste straight into a chat.
+   Deliberately not CSV or JSON: this is training notes, and "60x8" says in
+   four characters what {"w":60,"r":8} spends fourteen on. It also means you
+   can read the thing you are about to send. */
+function exportWeek(){
+  const now=Date.now(),since=now-7*86400000;
+  const w=activeWorkouts().filter(x=>x.startedAt>=since)
+    .sort((a,b)=>b.startedAt-a.startedAt);
+  if(!w.length)return null;
+  return `Rack \u2014 ${fmtRange(since,now)}, ${w.length} workout${w.length>1?'s':''}`
+    +'\n\n'+w.map(x=>
+      [fmtDate(x.startedAt),x.routineName,fmtLen(x.startedAt,x.endedAt)]
+        .filter(Boolean).join(' \u00b7 ')+'\n'
+      +x.entries.map(e=>`  ${exName(e.exerciseId,e.name)}: `
+        +e.sets.map(s=>`${fmtW(s.w)}\u00d7${s.r}`).join(', ')).join('\n')
+    ).join('\n\n')+'\n';}
+
+/* Safari can refuse clipboard.writeText in a standalone home-screen app; the
+   old textarea trick still works there. iOS needs a real selection range. */
+function legacyCopy(txt){
+  const t=document.createElement('textarea');t.value=txt;
+  t.style.cssText='position:fixed;top:0;left:0;opacity:0';
+  document.body.appendChild(t);t.contentEditable='true';t.readOnly=false;
+  const r=document.createRange();r.selectNodeContents(t);
+  const sel=getSelection();sel.removeAllRanges();sel.addRange(r);
+  t.setSelectionRange(0,txt.length);
+  let ok=false;try{ok=document.execCommand('copy');}catch(e){}
+  document.body.removeChild(t);return ok;}
+
+let copyTimer=null;
+function copyWeek(){
+  const txt=exportWeek();
+  const done=state=>{ui.copied=state;render();
+    clearTimeout(copyTimer);copyTimer=setTimeout(()=>{ui.copied=null;render();},2600);};
+  if(!txt)return done('none');
+  try{navigator.clipboard.writeText(txt)
+    .then(()=>done('yes'),()=>done(legacyCopy(txt)?'yes':'fail'));}
+  catch(e){done(legacyCopy(txt)?'yes':'fail');}}
+
 function vHistory(){
   const w=activeWorkouts().sort((a,b)=>b.startedAt-a.startedAt);
   if(!w.length)return `<h1>History</h1><div class="empty">Finished workouts show up here.</div>`;
-  return `<h1>History</h1>`+w.map(x=>{
+  const msg={yes:'Copied \u2014 paste it into Claude',fail:'Could not copy \u2014 try again',
+    none:'Nothing logged in the last 7 days'}[ui.copied];
+  return `<h1>History</h1>
+    <div style="margin:-8px 0 18px"><button class="back" onclick="copyWeek()"
+      ${ui.copied==='yes'?'style="color:var(--tab-history);font-weight:600"':''}
+      >${msg||'Copy last 7 days'}</button></div>`+w.map(x=>{
     const sets=x.entries.reduce((n,e)=>n+e.sets.length,0);
     const vol=x.entries.reduce((n,e)=>n+e.sets.reduce((m,s)=>m+s.w*s.r,0),0);
     const len=fmtLen(x.startedAt,x.endedAt);
