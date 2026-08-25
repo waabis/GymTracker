@@ -1,6 +1,6 @@
 {
-  "name": "Rack",
-  "short_name": "Rack",
+  "name": "Gym Tracker",
+  "short_name": "Gym Tracker",
   "description": "Personal workout tracker",
   "start_url": "./",
   "scope": "./",

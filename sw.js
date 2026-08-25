@@ -1,4 +1,4 @@
-/* Rack service worker — makes the app open with no signal.
+/* Gym Tracker service worker — makes the app open with no signal.
  *
  * BUMP `CACHE` ON EVERY DEPLOY. Changing this file is what tells the browser
  * there is a new version to install; if index.html changes but this file does
@@ -7,7 +7,7 @@
  * All paths are relative on purpose: the app lives at /GymTracker/ on GitHub
  * Pages but at / when served locally, and relative paths work in both.
  */
-const CACHE='rack-v28';
+const CACHE='rack-v29';
 
 /* Must cache for the app to open at all. */
 const CORE=['./','./index.html','./manifest.json'];
@@ -70,7 +70,7 @@ self.addEventListener('fetch',e=>{
       const net=fetch(req).then(r=>{if(keep(r))c.put('./index.html',r.clone());return r;})
         .catch(()=>null);
       return cached||await net||new Response(
-        '<h1>Offline</h1><p>Rack has not been saved for offline use yet. Open it once with a connection.</p>',
+        '<h1>Offline</h1><p>Gym Tracker has not been saved for offline use yet. Open it once with a connection.</p>',
         {status:503,headers:{'Content-Type':'text/html'}});
     })());
     return;

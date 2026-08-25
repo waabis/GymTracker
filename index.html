@@ -6,10 +6,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Rack">
+<meta name="apple-mobile-web-app-title" content="Gym Tracker">
 <meta name="theme-color" content="#FFFFFF">
 <link rel="apple-touch-icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAALQAAAC0CAIAAACyr5FlAAACd0lEQVR42u3dPU7DQBCAUbJyTxklF0CioOIGnIVTcSIkKgokjsENaCgROOvd7Oz4vYqChM34w46t/ByOp/MN/KYYAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EAeJAHIgDcSAOxIE4EAfiQBwgDsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8TB/5Yed/r5crvm1+6ev/Yz6Blncmj71aErR7CrROadSRk7hepbJS4jzkzK2Cnk7mP2mZThU8jaR4KZOFuhZxytAs+088gxE3sOxIE4EAfiYKgl/hL/eMZ+tcvMEdZgz3HZudx1zvQirEEcNXPvvW0irEEc9RPvt20irEEcW2fdY9tEWIM4EAfiQByIA3GAOBAH4kAciANxIA6mF+uVYB/vbz8/vT7V37aVLWu4/LZtH9f9w6M9Bx3/VcShj25xtN+ZE6aPogx9OKwgDsSBOJg2jiZXWuhqyzYqA/82kctwWFGGOJRRZYn5kCreWtj8ALdlDQ3fGjnwwG3PgTgQB+JAHIgDcSAOxIE4EAeIA3GQN45LP22+x6fTR1iDOLbOut9WibAGcdRPvPdWibAGcdTM/TpbJcIahpjgy3giTD9xAc5WEAfiQByIg8RxtHomn+mMIMdM7DnoHMf2wPNdSEgwkxJhFlkvMc0+kzJ8FrkvPk49k8PxdG5+pyvfRryra9IzzqRLHHhCijgQB4gDcSAOxIE4EAfiQByIA3GAOBAH4kAciANxIA7EgTgQB+IwAsSBOBAH4kAciANxIA7EgThAHIgDcSAOxIE4EAfiQByIA8SBOBAH4kAciANxIA6y+Qabo6PKDjwGoAAAAABJRU5ErkJggg==">
-<title>Rack</title>
+<title>Gym Tracker</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -865,7 +865,7 @@ function exportWeek(){
   const w=activeWorkouts().filter(x=>x.startedAt>=since)
     .sort((a,b)=>b.startedAt-a.startedAt);
   if(!w.length)return null;
-  return `Rack \u2014 ${fmtRange(since,now)}, ${w.length} workout${w.length>1?'s':''}`
+  return `Gym Tracker \u2014 ${fmtRange(since,now)}, ${w.length} workout${w.length>1?'s':''}`
     +'\n\n'+w.map(x=>
       [fmtDate(x.startedAt),x.routineName,fmtLen(x.startedAt,x.endedAt)]
         .filter(Boolean).join(' \u00b7 ')+'\n'
