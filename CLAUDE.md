@@ -1,4 +1,4 @@
-# Rack — gym workout tracker
+# Gym Tracker
 
 ## What this is
 
@@ -135,7 +135,10 @@ a full page; the trend chart is the app's only modal.
   opens with no signal. A new version announces itself with an in-app banner
   rather than reloading under you.
 
-Data model, one JSON blob in `localStorage` under key `rack.v1`:
+Data model, one JSON blob in `localStorage` under key `rack.v1`. That key, and
+the `rack-v*` service-worker cache names, are historical — the app used to be
+called Rack. Leave them alone: renaming the key orphans every workout already
+on the phone.
 
 ```
 {
