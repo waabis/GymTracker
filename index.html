@@ -164,6 +164,28 @@ nav button.tab-history.on{color:var(--tab-history);background:rgba(21,128,61,.14
 .modal-card{background:var(--bg);width:100%;max-width:520px;border-radius:20px 20px 0 0;
   padding:20px var(--pad) calc(env(safe-area-inset-bottom) + 24px);
   max-height:85vh;overflow-y:auto;box-shadow:0 -8px 30px rgba(23,26,28,.18)}
+
+/* month calendar: seven columns, Monday first. A day you trained is a filled
+   circle in that routine's own colour — the same colour the routine has on
+   the Routines and Workout tabs, so the month reads as a pattern of which
+   routine, not just whether. */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;text-align:center}
+.cal .dow{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--muted);padding-bottom:6px}
+.cal .day{aspect-ratio:1;display:grid;place-items:center;border-radius:50%;
+  font-size:15px;font-weight:600;color:var(--text);padding:0}
+.cal .day.blank{visibility:hidden}
+.cal .day.on{color:#fff;font-weight:800}
+.cal .day.on:active{transform:scale(.9)}
+/* today is a ring, so it reads even on a day with a filled circle */
+.cal .day.today{box-shadow:inset 0 0 0 2px var(--muted)}
+.cal .day.on.today{box-shadow:inset 0 0 0 2px var(--ink)}
+.cal-nav{width:40px;height:40px;border-radius:50%;font-size:22px;color:var(--tab-history);
+  background:var(--surface)}
+.cal-nav:disabled{color:var(--line);background:none}
+.cal-key{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:16px}
+.cal-key span{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--muted)}
+.cal-key i{width:10px;height:10px;border-radius:50%;flex:none}
 </style>
 </head>
 <body>
@@ -180,7 +202,7 @@ let db={exercises:[],routines:[],workouts:[],active:null,syncCursor:0,seeded:fal
 let view={t:'train'};
 let ui={pending:null,err:null,ekey:null,nostore:false,loginOpen:false,q:'',updateReady:false,
   chartFor:null,draft:{},newEx:{name:'',bodyPart:'',equipment:''},newRoutineName:'',
-  copied:null};
+  copied:null,cal:null};
 /* Weight/reps you have typed but not logged yet. render() rebuilds every card
    from scratch, so without this any redraw — adjusting rest, deleting a set,
    logging a set on another exercise, opening a chart — silently threw your
@@ -449,6 +471,7 @@ function render(){
     else if(view.t==='history')html+=vHistory();
   }
   html+=vChartModal();
+  html+=vCalModal();
   m.innerHTML=html;
   const sect=pickingForActive()?'train':ROUTINE_VIEWS.includes(view.t)?'routines':view.t;
   m.style.setProperty('--section',{train:'var(--accent-fg)',
@@ -760,6 +783,78 @@ function vChartModal(){
   </div>`;
 }
 
+/* ---------- month calendar ---------- */
+/* A month grid of the days you trained, opened from the History tab. Read-only
+   — it is a way of seeing the shape of a month (streaks, gaps, which routine)
+   and a way of jumping to one workout, not another place to edit them. */
+const monthOf=ms=>{const d=new Date(ms);return new Date(d.getFullYear(),d.getMonth(),1).getTime();};
+const dayKey=ms=>{const d=new Date(ms);
+  return d.getFullYear()+'-'+d.getMonth()+'-'+d.getDate();};
+/* a workout's colour is its routine's colour; workouts logged before a
+   routine existed, or with it since deleted, still have the id on them */
+const wColor=w=>routineColor(w.routineId||w.routineName||w.id);
+
+function openCal(){
+  /* open on the month of the newest workout, not always this one — in a week
+     off, this month is empty and the last thing you did is one tap away */
+  const w=activeWorkouts().sort((a,b)=>b.startedAt-a.startedAt)[0];
+  ui.cal=monthOf(w?w.startedAt:Date.now());render();}
+function closeCal(){ui.cal=null;render();}
+function shiftCal(n){const d=new Date(ui.cal);
+  ui.cal=new Date(d.getFullYear(),d.getMonth()+n,1).getTime();render();}
+/* tapping a day closes the calendar and opens that workout in the list behind
+   it, expanded — the calendar shows that you trained, the list shows what you did */
+function calOpenWorkout(id){
+  ui.cal=null;view={t:'history',open:id};render();
+  const el=document.getElementById('w-'+id);
+  if(el)el.scrollIntoView({block:'center'});}
+
+function vCalModal(){
+  if(!ui.cal)return'';
+  const cur=new Date(ui.cal),y=cur.getFullYear(),m=cur.getMonth();
+  const byDay={};
+  activeWorkouts().forEach(w=>{(byDay[dayKey(w.startedAt)]=byDay[dayKey(w.startedAt)]||[]).push(w);});
+  const first=(new Date(y,m,1).getDay()+6)%7;       /* Monday-first offset */
+  const days=new Date(y,m+1,0).getDate();
+  const today=dayKey(Date.now());
+  const cells=['Mo','Tu','We','Th','Fr','Sa','Su'].map(d=>`<div class="dow">${d}</div>`);
+  for(let i=0;i<first;i++)cells.push(`<div class="day blank"></div>`);
+  const mine=[];
+  for(let d=1;d<=days;d++){
+    const k=y+'-'+m+'-'+d,list=(byDay[k]||[]).sort((a,b)=>b.startedAt-a.startedAt);
+    const cls='day'+(list.length?' on':'')+(k===today?' today':'');
+    if(!list.length){cells.push(`<div class="${cls}">${d}</div>`);continue;}
+    mine.push(...list);
+    /* two workouts in one day is rare; the circle takes the later one's colour
+       and the tap opens it, the other is still there in the list */
+    cells.push(`<button class="${cls}" style="background:${wColor(list[0])}"
+      aria-label="${list.length} workout${list.length>1?'s':''} on ${d}"
+      onclick="calOpenWorkout('${list[0].id}')">${d}</button>`);
+  }
+  const vol=mine.reduce((n,w)=>n+w.entries.reduce((a,e)=>a+e.sets.reduce((b,s)=>b+s.w*s.r,0),0),0);
+  const key=[];
+  mine.forEach(w=>{const n=w.routineName;
+    if(!key.some(x=>x.n===n))key.push({n,c:wColor(w)});});
+  const now=new Date(),atNow=y===now.getFullYear()&&m===now.getMonth();
+  return `<div class="modal-backdrop" onclick="if(event.target===this)closeCal()">
+    <div class="modal-card">
+      <div class="row" style="margin-bottom:16px">
+        <button class="cal-nav" aria-label="Previous month" onclick="shiftCal(-1)">&lsaquo;</button>
+        <h1 style="margin:0;font-size:20px">${cur.toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</h1>
+        <button class="cal-nav" aria-label="Next month" onclick="shiftCal(1)" ${atNow?'disabled':''}>&rsaquo;</button>
+      </div>
+      <div class="cal">${cells.join('')}</div>
+      <div class="muted" style="margin-top:16px">${mine.length
+        ? `${mine.length} workout${mine.length>1?'s':''} · ${Math.round(vol)} kg lifted`
+        : 'Nothing logged this month'}</div>
+      ${key.length?`<div class="cal-key">${key.map(x=>
+        `<span><i style="background:${x.c}"></i>${esc(x.n)}</span>`).join('')}</div>`:''}
+      <div style="height:18px"></div>
+      <button class="btn ghost" onclick="closeCal()">Close</button>
+    </div>
+  </div>`;
+}
+
 /* ---------- export ---------- */
 /* The last 7 days as plain text, sized to paste straight into a chat.
    Deliberately not CSV or JSON: this is training notes, and "60x8" says in
@@ -805,15 +900,24 @@ function vHistory(){
   if(!w.length)return `<h1>History</h1><div class="empty">Finished workouts show up here.</div>`;
   const msg={yes:'Copied \u2014 paste it into Claude',fail:'Could not copy \u2014 try again',
     none:'Nothing logged in the last 7 days'}[ui.copied];
-  return `<h1>History</h1>
-    <div style="margin:-8px 0 18px"><button class="back" onclick="copyWeek()"
+  return `<div class="row" style="margin:4px 0 6px">
+      <h1 style="margin:0">History</h1>
+      <button class="x" aria-label="Open calendar" onclick="openCal()"
+        style="color:var(--tab-history);padding:6px 2px">
+        <svg width="24" height="24" viewBox="0 0 24 24" style="vertical-align:-5px">
+          <rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" stroke-width="2" fill="none"/>
+          <path d="M3 10 H21 M8 3 V6.5 M16 3 V6.5" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" fill="none"/>
+        </svg></button>
+    </div>
+    <div style="margin:0 0 18px"><button class="back" onclick="copyWeek()"
       ${ui.copied==='yes'?'style="color:var(--tab-history);font-weight:600"':''}
       >${msg||'Copy last 7 days'}</button></div>`+w.map(x=>{
     const sets=x.entries.reduce((n,e)=>n+e.sets.length,0);
     const vol=x.entries.reduce((n,e)=>n+e.sets.reduce((m,s)=>m+s.w*s.r,0),0);
     const len=fmtLen(x.startedAt,x.endedAt);
     const open=view.open===x.id;
-    return `<div class="card"><button class="tap" onclick="toggle('${x.id}')"><div class="row">
+    return `<div class="card" id="w-${x.id}"><button class="tap" onclick="toggle('${x.id}')"><div class="row">
       <div><div style="font-weight:600">${esc(x.routineName)}</div>
       <div class="muted">${fmtDate(x.startedAt)}${len?' \u00b7 '+len:''} \u00b7 ${sets} sets \u00b7 ${Math.round(vol)} kg lifted</div></div>
       <div class="chev">${open?'&#8964;':'&rsaquo;'}</div></div></button>

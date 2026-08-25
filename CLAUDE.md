@@ -110,6 +110,14 @@ a full page; the trend chart is the app's only modal.
 
 - Past workouts, newest first, expandable to the individual sets. Total kg
   lifted per workout, and how long it took. Delete a workout.
+- **Calendar icon** next to the title opens a month view in the same
+  bottom-sheet modal the trend chart uses. A day you trained is a filled
+  circle in that routine's colour, so a month reads as a pattern of which
+  routine, not just whether. Monday-first, today is a ring, the month's
+  workout count and total kg sit under the grid with a colour key. Tapping a
+  day closes the sheet and opens that workout in the list behind it, scrolled
+  to. Opens on the month of your newest workout, not always this one. Prev/next
+  arrows; next stops at the current month. Read-only — no editing from here.
 - **"Copy last 7 days"** copies the week as plain text, to paste into a chat
   and ask for feedback. Not CSV or JSON on purpose: `60x8` says in four
   characters what `{"w":60,"r":8}` spends fourteen on, it reads the same to
@@ -185,6 +193,7 @@ is small friction fixes, not features:
 - Routine colours carried onto the Workout tab.
 - Tab bar sat closer to the bottom edge in standalone.
 - Plate calculator under the weight on barbell exercises.
+- Month calendar of workouts, opened from the History tab (25 Aug 2026).
 
 Known gaps, ranked by how likely they are to bite:
 
