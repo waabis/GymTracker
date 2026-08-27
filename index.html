@@ -246,14 +246,40 @@ const exName=(exerciseId,fallback)=>{const e=exById(exerciseId);
   return e?e.name:(fallback||'Unknown exercise');};
 const activeExercises=()=>db.exercises.filter(e=>!e.deleted);
 const ROUTINE_VIEWS=['routines','routine','picker','exercises','exercise','newexercise','newroutine'];
-/* deterministic per-routine colour: same routine always gets the same
-   colour, chosen from a fixed palette so it's always vivid and readable,
-   picked to stay clear of the app's own semantic colours (amber accent,
-   blue Routines-section, green History-section, red danger). */
-const ROUTINE_COLORS=['#7C3AED','#BE123C','#0F766E','#C2410C','#0E7490','#A21CAF','#4338CA','#854D0E'];
-function routineColor(id){
+/* Per-routine colour. Eight hues spread right around the wheel — crimson,
+   cyan, orange, violet, lime, magenta, emerald, blue — so Chest, Legs and
+   Shoulders never read as three shades of the same thing. Every one is dark
+   enough for white text (calendar circles) and legible as text on white
+   (routine names), which is what rules out yellow. The array is ordered so
+   neighbours are far apart in hue: a collision bumps to the next slot, and
+   that slot should look nothing like the one it came from. */
+const ROUTINE_COLORS=['#E11D48','#0891B2','#EA580C','#7C3AED','#4D7C0F','#C026D3','#059669','#2563EB'];
+function colorSlot(id){
   let h=0;for(let i=0;i<id.length;i++)h=(h*31+id.charCodeAt(i))>>>0;
-  return ROUTINE_COLORS[h%ROUTINE_COLORS.length];
+  return h%ROUTINE_COLORS.length;
+}
+/* Hashing the id alone was the real problem: with eight colours, four
+   routines collide more often than not (~59%), and two routines in the
+   same colour is worse than two that merely look alike. So hash for a
+   preference, then hand out the colours — each routine keeps its preferred
+   one if it's free and takes the next free one if not, walking routines in
+   stored order. Deterministic, stable while the set of routines is, and no
+   two routines on screen ever share a colour until there are more than
+   eight. Anything not a live routine (a deleted one still owning history)
+   falls back to the plain hash. */
+let rcMap=null,rcKey='';
+function routineColor(id){
+  const live=db.routines?db.routines.filter(r=>!r.deleted):[];
+  const key=live.map(r=>r.id).join(',');
+  if(key!==rcKey){
+    rcKey=key;rcMap={};const taken=new Set();
+    for(const r of live){
+      let s=colorSlot(r.id);
+      while(taken.has(s)&&taken.size<ROUTINE_COLORS.length)s=(s+1)%ROUTINE_COLORS.length;
+      taken.add(s);rcMap[r.id]=ROUTINE_COLORS[s];
+    }
+  }
+  return rcMap[id]||ROUTINE_COLORS[colorSlot(id)];
 }
 const norm=s=>String(s||'').trim().toLowerCase();
 const seedId=name=>'seed:'+norm(name).replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
