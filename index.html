@@ -395,6 +395,12 @@ function fmtClock(s){s=Math.max(0,Math.round(s));return Math.floor(s/60)+':'+Str
    Shown only for barbell exercises — nothing to load on a cable stack. */
 const BAR_KG=20;
 const PLATES=[25,20,15,10,5,2.5,1.25];
+/* What one tap of -/+ on the weight is worth, by equipment: dumbbells come in
+   2 kg jumps on the rack, a barbell's smallest pair of plates is 2.5 kg, and
+   a stack or a plate-loaded machine is 5 kg or coarser. Unknown equipment
+   gets the coarse step — a wrong big step is one tap to fix, a wrong small
+   step is four. */
+const wStep=en=>({Dumbbell:2,Barbell:2.5}[(exById(en.exerciseId)||{}).equipment]||5);
 function plateLine(total){
   if(!(total>0))return '';
   if(total<BAR_KG)return `Lighter than the ${BAR_KG} kg bar`;
@@ -785,10 +791,10 @@ function vActive(){
         <button class="x" onclick="delSet(${i},${j})">&times;</button></div>`).join('')}
       <div class="pair">
         <div><div class="lbl">Weight</div><div class="step">
-          <button onclick="bump(${i},'w',-2.5)">&minus;</button>
+          <button onclick="bump(${i},'w',-${wStep(en)})">&minus;</button>
           <input id="w${i}" inputmode="decimal" value="${esc(draftOr('w'+i,nextW(en)))}"
             oninput="setDraft('w${i}',this.value)" onfocus="this.select()">
-          <button onclick="bump(${i},'w',2.5)">+</button></div></div>
+          <button onclick="bump(${i},'w',${wStep(en)})">+</button></div></div>
         <div><div class="lbl">Reps</div><div class="step">
           <button onclick="bump(${i},'r',-1)">&minus;</button>
           <input id="r${i}" inputmode="numeric" value="${esc(draftOr('r'+i,nextR(en)))}"

@@ -58,7 +58,9 @@ a full page; the trend chart is the app's only modal.
 - Pick a routine and start. Each routine card carries its own colour, the same
   one the Routines tab gives it.
 - Log a set: weight, reps and a tick button share **one row** (see constraint
-  2). −/+ steppers, 2.5 kg and 1 rep.
+  2). −/+ steppers: 1 rep, and a weight step that follows the exercise's
+  equipment tag — 2 kg for Dumbbell, 2.5 kg for Barbell, 5 kg for everything
+  else including untagged (`wStep()`).
 - First set of each exercise pre-fills from what you lifted last session; every
   set after that pre-fills from the set before it.
 - "Last time: 50kg×5, …" under each exercise, from its previous session.
@@ -166,7 +168,8 @@ UI: light. White background, cool blue-grey cards, amber accent (`#F5A900`).
 Each tab owns a colour — Workout amber, Routines blue, History green — carried
 through its nav pill, eyebrow labels and chevrons via a `--section` variable.
 Archivo from Google Fonts, tabular numerals. Weight/reps use −/+ steppers
-(2.5 kg and 1 rep) and pre-fill from the previous set. Each routine also owns a
+(1 rep, and a weight step set by equipment — see `wStep()`) and pre-fill from
+the previous set. Each routine also owns a
 deterministic colour from its id (`routineColor()`), used wherever that routine
 appears. Deleting anything is a two-tap confirm in place, never a pop-up.
 
@@ -197,6 +200,8 @@ is small friction fixes, not features:
 - Tab bar sat closer to the bottom edge in standalone.
 - Plate calculator under the weight on barbell exercises.
 - Month calendar of workouts, opened from the History tab (25 Aug 2026).
+- Workout header stays on screen while scrolling (16 Nov 2026).
+- Weight steppers step by equipment, not a flat 2.5 kg (16 Nov 2026).
 
 Known gaps, ranked by how likely they are to bite:
 
