@@ -142,6 +142,16 @@ nav button.tab-routines.on{color:var(--tab-routines);background:rgba(29,78,216,.
 nav button.tab-history.on{color:var(--tab-history);background:rgba(21,128,61,.14)}
 
 .bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+/* The workout header stays put while you scroll: at the bottom of a long
+   session you can still see the clock and Finish is one tap away. The
+   negative margins cancel #main's padding so the stuck bar covers the full
+   width and the status-bar strip; its own padding puts the content back
+   exactly where it sat. Only works because render() emits it as the first
+   thing in #main — anything above it would be painted over. */
+.bar.stick{position:sticky;top:0;z-index:15;background:var(--bg);
+  margin:calc(-1 * (env(safe-area-inset-top) + 12px)) calc(-1 * var(--pad)) 12px;
+  padding:calc(env(safe-area-inset-top) + 12px) var(--pad) 10px;
+  border-bottom:1px solid var(--line)}
 .back{font-size:15px;color:var(--muted);font-weight:500}
 .timer{display:flex;align-items:center;gap:5px;font-size:15px;font-weight:600;
   color:var(--accent-fg);letter-spacing:.04em;font-variant-numeric:tabular-nums}
@@ -474,14 +484,19 @@ async function logout(){if(sb)await sb.auth.signOut();render();}
 /* ---------- views ---------- */
 function render(){
   const m=document.getElementById('main');
-  let html = ui.nostore?`<div class="warn">Preview mode &mdash; nothing is being saved. On your phone it will save properly.</div>`:'';
+  /* In a running workout the sticky header is emitted before the banners: it
+     has to be the first element in #main or its full-bleed background covers
+     whatever sits above it the moment it sticks. */
+  const onWorkout=db.active&&view.t==='train';
+  let html = onWorkout?vActiveBar():'';
+  html += ui.nostore?`<div class="warn">Preview mode &mdash; nothing is being saved. On your phone it will save properly.</div>`:'';
   if(ui.updateReady)html+=`<div class="warn" style="cursor:pointer;border-left-color:var(--tab-history)"
     onclick="applyUpdate()">New version ready &mdash; tap to update</div>`;
   if(!session)html+=vAuthBanner();
   /* A workout in progress owns the Workout tab, but the other tabs still work —
      the tab bar used to light up the tab you tapped while leaving the workout
      on screen, which just looked broken. */
-  if(db.active&&view.t==='train')html+=vActive();
+  if(onWorkout)html+=vActive();
   else{
     /* the picker opened from a running workout is part of that workout, so no
        "still in progress" nudge — its back button already goes there */
@@ -722,9 +737,11 @@ function vExercise(){
     ${chips('equipment',EQUIPMENT)}`;
 }
 
-function vActive(){
+/* the sticky header, kept apart from the body so render() can put it at the
+   very top of #main — see .bar.stick */
+function vActiveBar(){
   const a=db.active;
-  return `<div class="bar"><div><div style="font-weight:600">${esc(a.routineName)}</div>
+  return `<div class="bar stick"><div><div style="font-weight:600">${esc(a.routineName)}</div>
       <div class="timer"><svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true">
           <circle cx="10" cy="11" r="7.2" fill="none" stroke="currentColor" stroke-width="1.8"/>
           <path d="M10 7.4v3.6l2.4 1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>
@@ -738,8 +755,11 @@ function vActive(){
            <button class="danger" style="margin-left:14px" onclick="cancelWorkout()">Tap to discard</button></span>`
         : `<span style="display:flex;align-items:center;gap:16px">
            <button class="danger" onclick="ask('disc')">Discard</button>
-           <button class="fin" onclick="ask('fin')">Finish</button></span>`}</div>
-    ${ui.pending==='disc'?`<div class="warn" style="border-left-color:var(--danger)">
+           <button class="fin" onclick="ask('fin')">Finish</button></span>`}</div>`;
+}
+function vActive(){
+  const a=db.active;
+  return `${ui.pending==='disc'?`<div class="warn" style="border-left-color:var(--danger)">
       This throws away the sets you have logged. Nothing is saved.</div>`:''}
     ${errAt('fin')}
     ${a.entries.map((en,i)=>{
